@@ -64,6 +64,8 @@ jobs:
   
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Fetch at least 2 commits to have HEAD^ available
       
       - uses: pnpm/action-setup@v4
           
@@ -76,16 +78,22 @@ jobs:
       - name: Check for changes in package.json
         id: check_changes
         run: |
-          VERSION_CHANGED=$(git diff HEAD^ HEAD -- 'apps/drizzle-service/package.json' | grep '"version":' || true) 
-          if [ -z "$VERSION_CHANGED" ]; then
-            echo "No version change detected, skipping publish."
-            echo "publish=false" >> $GITHUB_ENV
+          # Check if HEAD^ exists, if not this might be the first commit
+          if ! git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            echo "No previous commit found (possibly first commit), proceeding with publish."
+            echo "publish=true" >> $GITHUB_OUTPUT
           else
-            echo "Version change detected, proceeding with publish."
-            echo "publish=true" >> $GITHUB_ENV
+            VERSION_CHANGED=$(git diff HEAD^ HEAD -- 'apps/drizzle-service/package.json' | grep '"version":' || true)
+            if [ -z "$VERSION_CHANGED" ]; then
+              echo "No version change detected, skipping publish."
+              echo "publish=false" >> $GITHUB_OUTPUT
+            else
+              echo "Version change detected, proceeding with publish."
+              echo "publish=true" >> $GITHUB_OUTPUT
+            fi
           fi
       - name: Publish package
-        if: env.publish == 'true'
+        if: steps.check_changes.outputs.publish == 'true'
         run: |
           echo "Publishing package..."
           pnpm install --frozen-lockfile
