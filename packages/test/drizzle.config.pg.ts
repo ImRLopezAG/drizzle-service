@@ -1,5 +1,5 @@
 import { defineConfig } from 'drizzle-kit'
-process.loadEnvFile('.env.test')
+process.loadEnvFile()
 export default defineConfig({
 	dialect: 'postgresql',
 	dbCredentials: {

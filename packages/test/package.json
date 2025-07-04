@@ -9,7 +9,13 @@
     "test:watch": "vitest --reporter=verbose --watch",
     "lint": "biome check .",
     "lint:unsafe": "biome check --write --unsafe .",
-    "lint:write": "biome check --write ."
+    "lint:write": "biome check --write .",
+    "db:push": "drizzle-kit push",
+    "db:push:pg": "drizzle-kit push --config ./drizzle.config.pg.ts", 
+    "db:push:sqlite": "drizzle-kit push --config ./drizzle.config.sqlite.ts", 
+    "db:studio": "drizzle-kit studio",
+    "db:studio:pg": "drizzle-kit studio --config ./drizzle.config.pg.ts",
+    "db:studio:sqlite": "drizzle-kit studio --config ./drizzle.config.sqlite.ts"
   },
   "dependencies": {
     "drizzle-service": "workspace:*",
