@@ -1,4 +1,8 @@
-name: my-workflow
+name: Test Workflow
+on:
+  push:
+    branches:
+      - main
 jobs:
   my-job:
     name: my-job
