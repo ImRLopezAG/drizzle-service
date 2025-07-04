@@ -95,6 +95,8 @@ jobs:
       - name: Publish package
         if: steps.check_changes.outputs.publish == 'true'
         working-directory: apps/drizzle-service
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
         run: |
           pnpm install --frozen-lockfile
           pnpm build
