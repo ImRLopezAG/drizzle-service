@@ -45,6 +45,8 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
         run: |
           echo "Postgres is ready for testing"
+          echo "DATABASE_URL=$DATABASE_URL" > packages/test/.env
+          
       - name: Push database schema
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
