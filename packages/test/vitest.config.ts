@@ -7,6 +7,6 @@ export default defineConfig({
 		typecheck: {
 			enabled: true,
 		},
-		reporters: ['default', 'verbose', 'html'],
+		reporters: ['default', 'verbose'],
 	},
 })

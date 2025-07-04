@@ -19,9 +19,9 @@
       "import": "./lib/sqlite/index.js",
       "require": "./lib/sqlite/index.js"
     },
-    "./builder": {
-      "import": "./lib/builder/index.js",
-      "require": "./lib/builder/index.js"
+    "./builder/*": {
+      "import": "./lib/builder/*",
+      "require": "./lib/builder/*"
     }
   },
   "files": [

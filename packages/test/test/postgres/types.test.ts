@@ -7,7 +7,7 @@ import type {
 	Repository,
 	RepositoryHooks,
 	RepositoryMethods,
-} from 'drizzle-service/builder/index.d.ts'
+} from 'drizzle-service/builder/types.d.ts'
 import { describe, expectTypeOf, it } from 'vitest'
 import { repository, todos, users } from './schema'
 

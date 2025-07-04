@@ -1,15 +1,7 @@
-import type {
-	Handler,
-	MutationOperations,
-	MutationsBulkOperations,
-	QueryOperations,
-	Repository,
-	RepositoryHooks,
-	RepositoryMethods,
-	SQLiteDb,
-} from '@/builder/types'
+
 import { describe, expectTypeOf, it } from 'vitest'
 import { repository, todos, users } from './schema'
+import type { Repository, SQLiteDb, QueryOperations, MutationOperations, Handler, MutationsBulkOperations, RepositoryHooks, RepositoryMethods } from 'drizzle-service/builder/types.d.ts'
 
 // Repository instances for type testing
 const userRepository = repository(users)
