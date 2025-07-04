@@ -53,6 +53,9 @@ jobs:
         run: |
           pnpm db:push:pg
           pnpm db:push:sqlite
+
+      - name: Run build
+        run: pnpm build
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
