@@ -36,6 +36,7 @@ export type RepositoryOptions<
 	readonly soft?: {
 		readonly field: keyof T['$inferSelect']
 		readonly deletedValue: T['$inferSelect'][keyof T['$inferSelect']]
+		readonly notDeletedValue?: T['$inferSelect'][keyof T['$inferSelect']]
 	}
 	caching?: {
 		get?: <K, V>(key: K) => V | null

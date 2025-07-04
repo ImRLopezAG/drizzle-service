@@ -1,11 +1,20 @@
 {
   "name": "drizzle-service",
-  "module": "src/index.ts",
+  "module": "lib/index.js",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "description": "A service for managing Drizzle ORM entities with Bun and TypeScript.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "author": {
+    "name": "Angel Lopez",
+    "email": "contact@imrlopez.dev"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ImRLopezAG/drizzle-service.git"
+  },
   "exports": {
     ".": {
       "import": "./lib/index.js",
@@ -30,10 +39,6 @@
     "lib/**/*.d.ts",
     "lib/**/*.d.cts"
   ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ImRLopezAG/cy-utilities"
-  },
   "keywords": [
     "drizzle-orm",
     "typescript",
