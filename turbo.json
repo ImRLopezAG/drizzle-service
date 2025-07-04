@@ -1,0 +1,41 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "build": {
+      "outputs": [
+        "lib/**"
+      ]
+    },
+    "test": {
+      "cache": false,
+      "outputs": []
+    },
+    "lint": {
+      "cache": false
+    },
+    "lint:unsafe": {
+      "cache": false
+    },
+    "lint:write": {
+      "cache": false
+    },
+    "db:push": {
+      "cache": false
+    },
+    "db:push:sqlite": {
+      "cache": false
+    },
+    "db:push:pg": {
+      "cache": false
+    },
+    "db:studio": {
+      "cache": false
+    },
+    "db:studio:sqlite": {
+      "cache": false
+    },
+    "db:studio:pg": {
+      "cache": false
+    }
+  }
+}

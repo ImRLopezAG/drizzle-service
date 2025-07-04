@@ -1,0 +1,21 @@
+{
+  "extends": "@repo/type-config/base.json",
+  "compilerOptions": {
+    // Path mapping
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ],
+      "@builder/*": [
+        "src/builder/*"
+      ],
+      "@pg/*": [
+        "src/pg/*"
+      ],
+      "@sqlite/*": [
+        "src/sqlite/*"
+      ],
+    }
+  }
+}

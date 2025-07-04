@@ -1,0 +1,29 @@
+{
+  "name": "mono-repo-drizzle-service",
+  "module": "src/index.ts",
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "lint:unsafe": "turbo lint:unsafe",
+    "lint:write": "turbo lint:write",
+    "db:push": "turbo db:push",
+    "db:push:sqlite": "turbo db:push:sqlite",
+    "db:push:pg": "turbo db:push:pg",
+    "db:studio": "turbo db:studio",
+    "db:studio:sqlite": "turbo db:studio:sqlite",
+    "db:studio:pg": "turbo db:studio:pg"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4",
+    "@repo/type-config": "workspace:*",
+    "typescript": "^5.8"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "pnpm@10.12.0+sha512.3ab6da6066b7b14d6e9609a31d780191484b8e85f8d0e4581ef333bf4d869799937f5e57cbb8d3da2023019f6d4869a9acc381457fcb1d86e15fc44bfd4eb6a4"
+}

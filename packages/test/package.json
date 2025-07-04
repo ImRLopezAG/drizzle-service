@@ -1,0 +1,33 @@
+{
+  "name": "@repo/tests",
+  "module": "src/index.ts",
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "test:vitest": "vitest",
+    "test": "bun test --coverage repository",
+    "test:watch": "vitest --reporter=verbose --watch",
+    "lint": "biome check .",
+    "lint:unsafe": "biome check --write --unsafe .",
+    "lint:write": "biome check --write ."
+  },
+  "dependencies": {
+    "drizzle-service": "workspace:*",
+    "drizzle-orm": "^0.44.2"
+  },
+  "devDependencies": {
+    "@libsql/client": "^0.15.9",
+    "@types/bun": "latest",
+    "@vitest/coverage-v8": "3.2.4",
+    "drizzle-kit": "^0.31.4",
+    "drizzle-zod": "^0.8.2",
+    "postgres": "^3.4.7",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.4",
+    "zod": "^3.25.67"
+  },
+  "peerDependencies": {
+    "typescript": "^5.8",
+    "drizzle-orm": "^0.44.2"
+  }
+}
