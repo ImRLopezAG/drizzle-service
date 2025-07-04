@@ -94,8 +94,8 @@ jobs:
           fi
       - name: Publish package
         if: steps.check_changes.outputs.publish == 'true'
+        working-directory: apps/drizzle-service
         run: |
-          echo "Publishing package..."
           pnpm install --frozen-lockfile
           pnpm build
           pnpm publish --access public
