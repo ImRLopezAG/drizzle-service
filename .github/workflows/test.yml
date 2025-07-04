@@ -47,6 +47,8 @@ jobs:
           echo "Postgres is ready for testing"
           echo "DATABASE_URL=$DATABASE_URL" > packages/test/.env
           
+      - name: Run build
+        run: pnpm build
       - name: Push database schema
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
@@ -54,8 +56,6 @@ jobs:
           pnpm db:push:pg
           pnpm db:push:sqlite
 
-      - name: Run build
-        run: pnpm build
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
