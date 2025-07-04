@@ -76,7 +76,7 @@ jobs:
       - name: Check for changes in package.json
         id: check_changes
         run: |
-          VERSION_CHANGED=$(git diff HEAD^ HEAD -- 'apps/controllers/package.json' | grep '"version":' || true) 
+          VERSION_CHANGED=$(git diff HEAD^ HEAD -- 'apps/drizzle-service/package.json' | grep '"version":' || true) 
           if [ -z "$VERSION_CHANGED" ]; then
             echo "No version change detected, skipping publish."
             echo "publish=false" >> $GITHUB_ENV
