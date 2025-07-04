@@ -57,8 +57,11 @@ jobs:
         run: pnpm test
   publish:
     name: Publish to npm
+    needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Ensure this job only runs when the package version has changed
+  
     steps:
       - uses: actions/checkout@v4
       
@@ -70,13 +73,26 @@ jobs:
           registry-url: 'https://registry.npmjs.org/'
           cache: 'pnpm'
           
+      - name: Check for changes in package.json
+        id: check_changes
+        run: |
+          VERSION_CHANGED=$(git diff HEAD^ HEAD -- 'apps/controllers/package.json' | grep '"version":' || true) 
+          if [ -z "$VERSION_CHANGED" ]; then
+            echo "No version change detected, skipping publish."
+            echo "publish=false" >> $GITHUB_ENV
+          else
+            echo "Version change detected, proceeding with publish."
+            echo "publish=true" >> $GITHUB_ENV
+          fi
       - name: Install dependencies
         run: pnpm install
         
       - name: Build the package
+        if: env.publish == 'true'
         run: pnpm build
 
       - name: Publish to npm
+        if: env.publish == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
         run: pnpm publish --access public
