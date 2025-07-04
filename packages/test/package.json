@@ -4,7 +4,8 @@
   "type": "module",
   "version": "0.1.0",
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --dir ./test/sqlite",
+    "test:full": "vitest run",
     "test:bun": "bun test --coverage repository",
     "test:watch": "vitest --reporter=verbose --watch",
     "lint": "biome check .",
