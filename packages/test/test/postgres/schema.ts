@@ -1,4 +1,4 @@
-import { drizzleRepository } from 'drizzle-service/pg'
+import { drizzleService } from 'drizzle-service/pg'
 import { pgEnum, pgTableCreator, uniqueIndex } from 'drizzle-orm/pg-core'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
@@ -93,6 +93,6 @@ const db = drizzle({
 	client,
 })
 
-const repository = drizzleRepository(db)
+const service = drizzleService(db)
 
-export { db, repository, todos, users, tenants }
+export { db, service, todos, users, tenants }

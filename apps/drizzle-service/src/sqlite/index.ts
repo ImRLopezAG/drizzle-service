@@ -1,7 +1,7 @@
 import {
-	createRepository,
 	errorHandler,
 	getTableName,
+	initializeService,
 	tryHandler,
 } from '@/builder'
 import type {
@@ -14,10 +14,10 @@ import type {
 	QueryOperations,
 	QueryOpts,
 	RelationType,
-	Repository,
-	RepositoryHooks,
-	RepositoryMethods,
-	RepositoryOptions,
+	Service,
+	ServiceHooks,
+	ServiceMethods,
+	ServiceOptions,
 	SQLiteDb,
 	SQLiteQb,
 	WithRelations,
@@ -35,7 +35,7 @@ import {
 	or,
 } from 'drizzle-orm'
 
-export const createSqliteRepository = createRepository<SQLiteDb>(
+export const createSqliteService = initializeService<SQLiteDb>(
 	(db, table, opts) => {
 		type D = typeof db
 		type T = typeof table
@@ -402,7 +402,7 @@ export const createSqliteRepository = createRepository<SQLiteDb>(
 		const _mutationOperations: MutationOperations<T, O> = {
 			create: async (
 				data: T['$inferInsert'],
-				hooks?: RepositoryHooks<T>,
+				hooks?: ServiceHooks<T>,
 			): Handler<T['$inferSelect']> => {
 				return await tryHandler(
 					async () => {
@@ -431,7 +431,7 @@ export const createSqliteRepository = createRepository<SQLiteDb>(
 			update: async (
 				id: IdType<T, O>,
 				data: Partial<Omit<T['$inferInsert'], 'id' | 'createdAt'>>,
-				hooks?: RepositoryHooks<T>,
+				hooks?: ServiceHooks<T>,
 			): Handler<T['$inferSelect']> => {
 				return await tryHandler(
 					async () => {
@@ -460,7 +460,7 @@ export const createSqliteRepository = createRepository<SQLiteDb>(
 				)
 			},
 
-			delete: async (id: IdType<T, O>, hooks?: RepositoryHooks<T>) => {
+			delete: async (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
 				const [error] = await tryHandler(async () => {
 					const data = await baseMethods.findById(id)
 					if (!data) throw new Error(`Entity with id ${id} not found`)
@@ -504,7 +504,7 @@ export const createSqliteRepository = createRepository<SQLiteDb>(
 				}
 			},
 
-			hardDelete: async (id: IdType<T, O>, hooks?: RepositoryHooks<T>) => {
+			hardDelete: async (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
 				const [error] = await tryHandler(async () => {
 					const data = await baseMethods.findById(id)
 					if (!data) throw new Error(`Entity with id ${id} not found`)
@@ -533,7 +533,7 @@ export const createSqliteRepository = createRepository<SQLiteDb>(
 		const _bulkOperations: MutationsBulkOperations<T, O> = {
 			bulkCreate: async (
 				data: T['$inferInsert'][],
-				hooks?: RepositoryHooks<T> | undefined,
+				hooks?: ServiceHooks<T> | undefined,
 			): Handler<T['$inferSelect'][]> => {
 				return await tryHandler(
 					async () => {
@@ -553,7 +553,7 @@ export const createSqliteRepository = createRepository<SQLiteDb>(
 					id: IdType<T, O>
 					changes: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>
 				}[],
-				hooks?: RepositoryHooks<T> | undefined,
+				hooks?: ServiceHooks<T> | undefined,
 			): Handler<T['$inferSelect'][]> => {
 				return await tryHandler(
 					async () => {
@@ -585,7 +585,7 @@ export const createSqliteRepository = createRepository<SQLiteDb>(
 			},
 			bulkDelete: async (
 				ids: IdType<T, O>[],
-				hooks?: RepositoryHooks<T> | undefined,
+				hooks?: ServiceHooks<T> | undefined,
 			): Promise<{ readonly success: boolean; readonly message?: string }> => {
 				const [error] = await tryHandler(async () => {
 					const idField = getIdField()
@@ -639,7 +639,7 @@ export const createSqliteRepository = createRepository<SQLiteDb>(
 			},
 			bulkHardDelete: async (
 				ids: IdType<T, O>[],
-				hooks?: RepositoryHooks<T> | undefined,
+				hooks?: ServiceHooks<T> | undefined,
 			): Promise<{ readonly success: boolean; readonly message?: string }> => {
 				const [error] = await tryHandler(async () => {
 					const idField = getIdField()
@@ -668,19 +668,19 @@ export const createSqliteRepository = createRepository<SQLiteDb>(
 			},
 		}
 
-		const baseMethods: RepositoryMethods<T, O> = {
+		const baseMethods: ServiceMethods<T, O> = {
 			..._queryOperations,
 			..._mutationOperations,
 			..._bulkOperations,
 		}
 
-		const baseRepository = {
+		const baseService = {
 			...baseMethods,
 			...(override ? override(baseMethods) : {}),
 		}
 
-		const repository: Repository<T, D> = {
-			...baseRepository,
+		const service: Service<T, D> = {
+			...baseService,
 			_: baseMethods,
 			entityName,
 			db,
@@ -688,26 +688,26 @@ export const createSqliteRepository = createRepository<SQLiteDb>(
 		}
 
 		return {
-			...repository,
+			...service,
 			...rest,
-		} as Repository<T, D> & O
+		} as Service<T, D> & O
 	},
 )
 
-export function drizzleRepository<D extends SQLiteDb>(
+export function drizzleService<D extends SQLiteDb>(
 	db: D,
 ): <
 	T extends BaseEntity,
 	TExtensions extends Record<string, unknown> = Record<string, unknown>,
 >(
 	table: T,
-	opts?: RepositoryOptions<T, TExtensions>,
-) => Repository<T, D> & TExtensions {
+	opts?: ServiceOptions<T, TExtensions>,
+) => Service<T, D> & TExtensions {
 	return <
 		T extends BaseEntity,
 		TExtensions extends Record<string, unknown> = Record<string, unknown>,
 	>(
 		table: T,
-		opts?: RepositoryOptions<T, TExtensions>,
-	) => createSqliteRepository(db, table, opts) as Repository<T, D> & TExtensions
+		opts?: ServiceOptions<T, TExtensions>,
+	) => createSqliteService(db, table, opts) as Service<T, D> & TExtensions
 }

@@ -1,33 +1,33 @@
 import { and, eq, gt, like, lt, or, sql } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { repository, tenants, todos, users } from './schema'
+import { service, tenants, todos, users } from './schema'
 
 // Generate unique test data to avoid duplicate key constraints
 const timestamp = Date.now()
 const uniquePrefix = `Test-${timestamp}`
 
-// Repository setup
-const userRepository = repository(users, {
+// Service setup
+const userService = service(users, {
 	id: 'id',
 })
 
-const tenantsRepository = repository(tenants, {
+const tenantsService = service(tenants, {
 	id: 'tenantId',
 })
 
-const todosRepository = repository(todos, {
+const todosService = service(todos, {
 	soft: {
 		field: 'status',
 		deletedValue: 'canceled',
 	},
 	getSoftDeleted: async () => {
-		return await todosRepository.findBy(
+		return await todosService.findBy(
 			{ status: 'canceled' },
 			{ withDeleted: true },
 		)
 	},
 	withRelations: async () => {
-		return await todosRepository.db
+		return await todosService.db
 			.select()
 			.from(todos)
 			.leftJoin(users, eq(todos.userId, users.id))
@@ -61,7 +61,7 @@ const createTodo = async (
 	priority: 'low' | 'medium' | 'high' = 'medium',
 	status: 'todo' | 'backlog' | 'in-progress' | 'done' = 'todo',
 ) => {
-	const [error, todo] = await todosRepository.create({
+	const [error, todo] = await todosService.create({
 		title: `${uniquePrefix}-Todo-${index}`,
 		description: `Description for test todo ${index}`,
 		userId: testIds.userId,
@@ -85,7 +85,7 @@ const createTodo = async (
 // Setup test data
 beforeAll(async () => {
 	// Create a tenant first
-	const [tenantError, tenant] = await tenantsRepository.create({
+	const [tenantError, tenant] = await tenantsService.create({
 		name: `${uniquePrefix}-Tenant`,
 	})
 	expect(tenantError).toBeNull()
@@ -100,7 +100,7 @@ beforeAll(async () => {
 	}
 
 	// Now create the user with the correct tenant ID
-	const [userError, user] = await userRepository.create(userData)
+	const [userError, user] = await userService.create(userData)
 	expect(userError).toBeNull()
 	expect(user).toBeDefined()
 
@@ -111,9 +111,9 @@ beforeAll(async () => {
 	}
 })
 
-describe('PG Repository: Mutation Operations', () => {
+describe('PG Service: Mutation Operations', () => {
 	it('should create a record with required fields', async () => {
-		const [error, todo] = await todosRepository.create({
+		const [error, todo] = await todosService.create({
 			title: `${uniquePrefix}-Simple`,
 			userId: testIds.userId,
 			tenant: testIds.tenantId,
@@ -131,7 +131,7 @@ describe('PG Repository: Mutation Operations', () => {
 	})
 
 	it('should create a record with all fields specified', async () => {
-		const [error, todo] = await todosRepository.create({
+		const [error, todo] = await todosService.create({
 			title: `${uniquePrefix}-Complete`,
 			description: 'This is a complete todo',
 			userId: testIds.userId,
@@ -156,7 +156,7 @@ describe('PG Repository: Mutation Operations', () => {
 	it('should update a record with partial data', async () => {
 		const todo = await createTodo(999)
 
-		const [error, updated] = await todosRepository.update(todo.id, {
+		const [error, updated] = await todosService.update(todo.id, {
 			title: `${uniquePrefix}-Updated`,
 			status: 'in-progress',
 		})
@@ -174,7 +174,7 @@ describe('PG Repository: Mutation Operations', () => {
 	it('should update a record with all fields', async () => {
 		const todo = await createTodo(998)
 
-		const [error, updated] = await todosRepository.update(todo.id, {
+		const [error, updated] = await todosService.update(todo.id, {
 			title: `${uniquePrefix}-Fully-Updated`,
 			description: 'This is a fully updated description',
 			status: 'done',
@@ -195,13 +195,13 @@ describe('PG Repository: Mutation Operations', () => {
 	it('should soft delete a record', async () => {
 		const todo = await createTodo(997)
 
-		const { success, message } = await todosRepository.delete(todo.id)
+		const { success, message } = await todosService.delete(todo.id)
 
 		expect(success).toBe(true)
 		expect(message).toContain('successfully soft deleted')
 
 		// Verify the record is soft deleted
-		const deleted = await todosRepository.findById(todo.id)
+		const deleted = await todosService.findById(todo.id)
 		expect(deleted).not.toBeNull()
 		expect(deleted?.status).toBe('canceled')
 	})
@@ -209,10 +209,10 @@ describe('PG Repository: Mutation Operations', () => {
 	it('should not find soft deleted records by default', async () => {
 		const todo = await createTodo(996)
 
-		await todosRepository.delete(todo.id)
+		await todosService.delete(todo.id)
 
 		// Soft deleted records should not be returned in normal queries
-		const todos = await todosRepository.findAll()
+		const todos = await todosService.findAll()
 		const found = todos.find((t) => t.id === todo.id)
 		expect(found).toBeUndefined()
 	})
@@ -220,10 +220,10 @@ describe('PG Repository: Mutation Operations', () => {
 	it('should find soft deleted records when withDeleted option is used', async () => {
 		const todo = await createTodo(995)
 
-		await todosRepository.delete(todo.id)
+		await todosService.delete(todo.id)
 
 		// Soft deleted records should be returned when withDeleted is true
-		const todos = await todosRepository.findAll({ withDeleted: true })
+		const todos = await todosService.findAll({ withDeleted: true })
 		const found = todos.find((t) => t.id === todo.id)
 		expect(found).toBeDefined()
 		expect(found?.status).toBe('canceled')
@@ -232,9 +232,9 @@ describe('PG Repository: Mutation Operations', () => {
 	it('should use custom soft delete implementation', async () => {
 		const todo = await createTodo(994)
 
-		await todosRepository.delete(todo.id)
+		await todosService.delete(todo.id)
 
-		const deletedTodos = await todosRepository.getSoftDeleted()
+		const deletedTodos = await todosService.getSoftDeleted()
 		expect(deletedTodos.length).toBeGreaterThan(0)
 		const found = deletedTodos.find((t) => t.id === todo.id)
 		expect(found).toBeDefined()
@@ -244,7 +244,7 @@ describe('PG Repository: Mutation Operations', () => {
 	it('should handle the lifecycle hooks during create', async () => {
 		let hookCalled = false
 
-		const [error, todo] = await todosRepository.create(
+		const [error, todo] = await todosService.create(
 			{
 				title: `${uniquePrefix}-Hooks`,
 				userId: testIds.userId,
@@ -270,7 +270,7 @@ describe('PG Repository: Mutation Operations', () => {
 		const todo = await createTodo(993)
 		let hookCalled = false
 
-		const [error, updated] = await todosRepository.update(
+		const [error, updated] = await todosService.update(
 			todo.id,
 			{
 				title: `${uniquePrefix}-Updated-With-Hooks`,
@@ -291,7 +291,7 @@ describe('PG Repository: Mutation Operations', () => {
 	})
 })
 
-describe('PG Repository: Bulk Mutation Operations', () => {
+describe('PG Service: Bulk Mutation Operations', () => {
 	it('should bulk create multiple records', async () => {
 		const todosToCreate = Array.from({ length: 5 }, (_, i) => ({
 			title: `${uniquePrefix}-Bulk-${i}`,
@@ -309,7 +309,7 @@ describe('PG Repository: Bulk Mutation Operations', () => {
 					: 'documentation') as 'bug' | 'feature' | 'documentation',
 		}))
 
-		const [error, todos] = await todosRepository.bulkCreate(todosToCreate)
+		const [error, todos] = await todosService.bulkCreate(todosToCreate)
 
 		expect(error).toBeNull()
 		expect(todos).toBeDefined()
@@ -346,7 +346,7 @@ describe('PG Repository: Bulk Mutation Operations', () => {
 			},
 		}))
 
-		const [error, updatedTodos] = await todosRepository.bulkUpdate(updates)
+		const [error, updatedTodos] = await todosService.bulkUpdate(updates)
 
 		expect(error).toBeNull()
 		expect(updatedTodos).toBeDefined()
@@ -374,27 +374,27 @@ describe('PG Repository: Bulk Mutation Operations', () => {
 
 		const idsToDelete = createdTodos.map((todo) => todo.id)
 
-		const { success, message } = await todosRepository.bulkDelete(idsToDelete)
+		const { success, message } = await todosService.bulkDelete(idsToDelete)
 
 		expect(success).toBe(true)
 		expect(message).toBeDefined()
 
 		// Verify the records are soft deleted
 		for (const id of idsToDelete) {
-			const todo = await todosRepository.findById(id)
+			const todo = await todosService.findById(id)
 			expect(todo).not.toBeNull()
 			expect(todo?.status).toBe('canceled')
 		}
 
 		// They shouldn't appear in normal queries
-		const todos = await todosRepository.findAll()
+		const todos = await todosService.findAll()
 		for (const id of idsToDelete) {
 			const found = todos.find((t) => t.id === id)
 			expect(found).toBeUndefined()
 		}
 
 		// But should appear in queries with withDeleted
-		const todosWithDeleted = await todosRepository.findAll({
+		const todosWithDeleted = await todosService.findAll({
 			withDeleted: true,
 		})
 		for (const id of idsToDelete) {
@@ -414,14 +414,14 @@ describe('PG Repository: Bulk Mutation Operations', () => {
 		const idsToDelete = createdTodos.map((todo) => todo.id)
 
 		const { success, message } =
-			await todosRepository.bulkHardDelete(idsToDelete)
+			await todosService.bulkHardDelete(idsToDelete)
 
 		expect(success).toBe(true)
 		expect(message).toBeDefined()
 
 		// Verify the records are actually deleted
 		for (const id of idsToDelete) {
-			const todo = await todosRepository.findById(id)
+			const todo = await todosService.findById(id)
 			expect(todo).toBeNull()
 		}
 	})
@@ -435,7 +435,7 @@ describe('PG Repository: Bulk Mutation Operations', () => {
 			tenant: testIds.tenantId,
 		}))
 
-		const [error, todos] = await todosRepository.bulkCreate(todosToCreate, {
+		const [error, todos] = await todosService.bulkCreate(todosToCreate, {
 			afterAction: async () => {
 				hookCalledCount++
 				return Promise.resolve()
@@ -457,7 +457,7 @@ describe('PG Repository: Bulk Mutation Operations', () => {
 	})
 })
 
-describe('PG Repository: Query Operations (Without Options)', () => {
+describe('PG Service: Query Operations (Without Options)', () => {
 	// Create test data for queries
 	beforeAll(async () => {
 		// Create a variety of todos for testing queries
@@ -480,7 +480,7 @@ describe('PG Repository: Query Operations (Without Options)', () => {
 	})
 
 	it('should find all records', async () => {
-		const todos = await todosRepository.findAll()
+		const todos = await todosService.findAll()
 		expect(todos).toBeInstanceOf(Array)
 		expect(todos.length).toBeGreaterThan(0)
 
@@ -507,7 +507,7 @@ describe('PG Repository: Query Operations (Without Options)', () => {
 			throw new Error('No todo ID available for testing')
 		}
 
-		const todo = await todosRepository.findById(todoId)
+		const todo = await todosService.findById(todoId)
 
 		expect(todo).not.toBeNull()
 		expect(todo?.id).toBe(todoId)
@@ -515,13 +515,13 @@ describe('PG Repository: Query Operations (Without Options)', () => {
 
 	it('should return null when finding a non-existent ID', async () => {
 		const nonExistentId = 'non-existent-id'
-		const todo = await todosRepository.findById(nonExistentId)
+		const todo = await todosService.findById(nonExistentId)
 
 		expect(todo).toBeNull()
 	})
 
 	it('should find records by exact criteria', async () => {
-		const todos = await todosRepository.findBy({
+		const todos = await todosService.findBy({
 			userId: testIds.userId,
 			priority: 'high',
 		})
@@ -537,7 +537,7 @@ describe('PG Repository: Query Operations (Without Options)', () => {
 	})
 
 	it('should find records by a single field', async () => {
-		const todos = await todosRepository.findByField('status', 'done')
+		const todos = await todosService.findByField('status', 'done')
 
 		expect(todos).toBeInstanceOf(Array)
 		expect(todos.length).toBeGreaterThan(0)
@@ -549,7 +549,7 @@ describe('PG Repository: Query Operations (Without Options)', () => {
 	})
 
 	it('should find records by matching any of the criteria (OR condition)', async () => {
-		const todos = await todosRepository.findByMatching({
+		const todos = await todosService.findByMatching({
 			status: 'done',
 			priority: 'high',
 		})
@@ -565,13 +565,13 @@ describe('PG Repository: Query Operations (Without Options)', () => {
 	})
 
 	it('should count records', async () => {
-		const totalCount = await todosRepository.count()
+		const totalCount = await todosService.count()
 		expect(totalCount).toBeGreaterThan(0)
 
 		// Count with criteria
-		const highPriorityCount = await todosRepository.count({ priority: 'high' })
-		const lowPriorityCount = await todosRepository.count({ priority: 'low' })
-		const mediumPriorityCount = await todosRepository.count({
+		const highPriorityCount = await todosService.count({ priority: 'high' })
+		const lowPriorityCount = await todosService.count({ priority: 'low' })
+		const mediumPriorityCount = await todosService.count({
 			priority: 'medium',
 		})
 
@@ -585,14 +585,14 @@ describe('PG Repository: Query Operations (Without Options)', () => {
 	})
 
 	it('should count records with criteria', async () => {
-		const doneTasksCount = await todosRepository.count({ status: 'done' })
-		const doneTasks = await todosRepository.findBy({ status: 'done' })
+		const doneTasksCount = await todosService.count({ status: 'done' })
+		const doneTasks = await todosService.findBy({ status: 'done' })
 
 		expect(doneTasksCount).toBe(doneTasks.length)
 	})
 
 	it('should find records with cursor pagination', async () => {
-		const result = await todosRepository.findWithCursor({
+		const result = await todosService.findWithCursor({
 			limit: 5,
 		})
 
@@ -607,7 +607,7 @@ describe('PG Repository: Query Operations (Without Options)', () => {
 	})
 
 	it('should use relations to join tables', async () => {
-		const todosWithRelations = await todosRepository.withRelations()
+		const todosWithRelations = await todosService.withRelations()
 
 		expect(todosWithRelations).toBeInstanceOf(Array)
 		expect(todosWithRelations.length).toBeGreaterThan(0)
@@ -623,7 +623,7 @@ describe('PG Repository: Query Operations (Without Options)', () => {
 	})
 
 	it('should find a user with their todos', async () => {
-		const userWithTodos = await userRepository.findBy(
+		const userWithTodos = await userService.findBy(
 			{ id: testIds.userId },
 			{
 				relations: [
@@ -666,10 +666,10 @@ describe('PG Repository: Query Operations (Without Options)', () => {
 	})
 })
 
-describe('PG Repository: Query Operations (With Options)', () => {
+describe('PG Service: Query Operations (With Options)', () => {
 	it('should find records with pagination', async () => {
-		const page1 = await todosRepository.findAll({ page: 1, limit: 5 })
-		const page2 = await todosRepository.findAll({ page: 2, limit: 5 })
+		const page1 = await todosService.findAll({ page: 1, limit: 5 })
+		const page2 = await todosService.findAll({ page: 2, limit: 5 })
 
 		expect(page1).toHaveLength(5)
 		expect(page2).toHaveLength(5)
@@ -684,15 +684,15 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should respect the maximum limit', async () => {
-		// The repository is configured with a maxLimit, but it seems to be higher or not enforced
-		const todos = await todosRepository.findAll({ limit: 1000 })
+		// The Service is configured with a maxLimit, but it seems to be higher or not enforced
+		const todos = await todosService.findAll({ limit: 1000 })
 
 		// We just verify we get results and don't error when requesting a very large limit
 		expect(todos.length).toBeGreaterThan(0)
 	})
 
 	it('should order results by a single field ascending', async () => {
-		const todos = await todosRepository.findAll({
+		const todos = await todosService.findAll({
 			orderBy: { title: 'asc' },
 		})
 
@@ -703,7 +703,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should order results by a single field descending', async () => {
-		const todos = await todosRepository.findAll({
+		const todos = await todosService.findAll({
 			orderBy: { title: 'desc' },
 		})
 
@@ -714,7 +714,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should filter results by multiple criteria', async () => {
-		const todos = await todosRepository.findBy(
+		const todos = await todosService.findBy(
 			{
 				userId: testIds.userId,
 				status: 'done',
@@ -734,7 +734,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should use cursor pagination with correct ordering', async () => {
-		const firstPage = await todosRepository.findWithCursor({
+		const firstPage = await todosService.findWithCursor({
 			limit: 3,
 			orderBy: { createdAt: 'desc' },
 		})
@@ -748,7 +748,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 
 		// Skip testing second page if the nextCursor is null
 		if (firstPage.nextCursor) {
-			const secondPage = await todosRepository.findWithCursor({
+			const secondPage = await todosService.findWithCursor({
 				limit: 3,
 				cursor: firstPage.nextCursor,
 				orderBy: { createdAt: 'desc' },
@@ -761,7 +761,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 
 	it('should apply custom SQL conditions', async () => {
 		// Use the table reference directly, not the result variable
-		const todosResult = await todosRepository.findAll({
+		const todosResult = await todosService.findAll({
 			custom: sql`title LIKE ${`%${uniquePrefix}%`}`,
 		})
 
@@ -776,7 +776,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	it('should apply ordering with multiple fields', async () => {
 		// Note: The order of fields might vary by implementation
 		// Just verify we get ordered results without errors
-		const todos = await todosRepository.findAll({
+		const todos = await todosService.findAll({
 			orderBy: { priority: 'desc', status: 'asc' },
 		})
 
@@ -793,7 +793,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should apply filters and ordering together', async () => {
-		const todos = await todosRepository.findBy(
+		const todos = await todosService.findBy(
 			{ priority: 'high' },
 			{ orderBy: { createdAt: 'desc' } },
 		)
@@ -812,7 +812,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should combine pagination with filters and ordering', async () => {
-		const todos = await todosRepository.findAll({
+		const todos = await todosService.findAll({
 			page: 1,
 			limit: 5,
 			orderBy: { status: 'asc', createdAt: 'desc' },
@@ -840,7 +840,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should find records with relations and apply filters', async () => {
-		const userTodos = await todosRepository.findBy(
+		const userTodos = await todosService.findBy(
 			{ userId: testIds.userId },
 			{
 				relations: [
@@ -861,7 +861,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should parse results with a custom function', async () => {
-		const result = await todosRepository.findAll({
+		const result = await todosService.findAll({
 			parse: (data) => {
 				return data.map((todo) => ({
 					id: todo.id,
@@ -889,7 +889,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 		const searchString = uniquePrefix
 		const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 hours ago
 
-		const todosWithSearch = await todosRepository.findAll({
+		const todosWithSearch = await todosService.findAll({
 			custom: and(
 				like(sql`title`, `%${searchString}%`),
 				gt(sql`created_at`, cutoffDate.toISOString()), // Convert to ISO string for PostgreSQL
@@ -909,7 +909,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 
 	it('should support complex AND/OR conditions', async () => {
 		// Find todos that are either (high priority AND done status) OR (low priority AND in-progress status)
-		const todosComplex = await todosRepository.findAll({
+		const todosComplex = await todosService.findAll({
 			custom: or(
 				and(eq(sql`priority`, 'high'), eq(sql`status`, 'done')),
 				and(eq(sql`priority`, 'low'), eq(sql`status`, 'in-progress')),
@@ -933,7 +933,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 		const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
 		// Find todos created in the last day
-		const todosInRange = await todosRepository.findAll({
+		const todosInRange = await todosService.findAll({
 			custom: and(
 				gt(sql`created_at`, oneDayAgo.toISOString()), // Convert to ISO string for PostgreSQL
 				lt(sql`created_at`, now.toISOString()),
@@ -952,22 +952,22 @@ describe('PG Repository: Query Operations (With Options)', () => {
 
 	it('should support combined operations: find, count, and filter', async () => {
 		// Find high priority todos
-		const highPriorityTodos = await todosRepository.findBy({ priority: 'high' })
+		const highPriorityTodos = await todosService.findBy({ priority: 'high' })
 
 		// Count high priority todos
-		const highPriorityCount = await todosRepository.count({ priority: 'high' })
+		const highPriorityCount = await todosService.count({ priority: 'high' })
 
 		// Count should match the length of the found results
 		expect(highPriorityCount).toBe(highPriorityTodos.length)
 
 		// Find high priority todos with a specific status
-		const highPriorityDoneTodos = await todosRepository.findBy({
+		const highPriorityDoneTodos = await todosService.findBy({
 			priority: 'high',
 			status: 'done',
 		})
 
 		// Count high priority todos with done status
-		const highPriorityDoneCount = await todosRepository.count({
+		const highPriorityDoneCount = await todosService.count({
 			priority: 'high',
 			status: 'done',
 		})
@@ -980,7 +980,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should handle multiple relations in queries', async () => {
-		const todosWithMultipleRelations = await todosRepository.findAll({
+		const todosWithMultipleRelations = await todosService.findAll({
 			relations: [
 				{ type: 'left', table: users, sql: eq(todos.userId, users.id) },
 				{
@@ -1001,7 +1001,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should handle custom SQL conditions with relations', async () => {
-		const todosWithCustomCondition = await todosRepository.findAll({
+		const todosWithCustomCondition = await todosService.findAll({
 			relations: [
 				{ type: 'left', table: users, sql: eq(todos.userId, users.id) },
 			],
@@ -1016,7 +1016,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should handle custom SQL conditions with multiple relations', async () => {
-		const todosWithMultipleRelations = await todosRepository.findAll({
+		const todosWithMultipleRelations = await todosService.findAll({
 			relations: [
 				{ type: 'left', table: users, sql: eq(todos.userId, users.id) },
 				{
@@ -1040,7 +1040,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 	})
 
 	it('should handle custom SQL conditions with complex logic', async () => {
-		const todosWithComplexCondition = await todosRepository.findAll({
+		const todosWithComplexCondition = await todosService.findAll({
 			custom: or(
 				and(
 					like(sql`title`, `%${uniquePrefix}%`),
@@ -1067,7 +1067,7 @@ describe('PG Repository: Query Operations (With Options)', () => {
 		}
 	})
 	it('should handle workspace', async () => {
-		const workspaceTodos = await todosRepository.findAll({
+		const workspaceTodos = await todosService.findAll({
 			workspace: {
 				field: 'tenant',
 				value: testIds.tenantId,

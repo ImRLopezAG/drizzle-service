@@ -1,9 +1,9 @@
-import { drizzleRepository as pg } from './pg'
-import { drizzleRepository as sqlite } from './sqlite'
+import { drizzleService as pg } from './pg'
+import { drizzleService as sqlite } from './sqlite'
 
-export const drizzleRepository = {
+export const drizzleService = {
 	pg,
 	sqlite,
 }
 
-export default drizzleRepository
+export default drizzleService

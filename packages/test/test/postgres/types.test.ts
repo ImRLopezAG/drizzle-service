@@ -4,22 +4,22 @@ import type {
 	MutationsBulkOperations,
 	PostgresDb,
 	QueryOperations,
-	Repository,
-	RepositoryHooks,
-	RepositoryMethods,
+	Service,
+	ServiceHooks,
+	ServiceMethods,
 } from 'drizzle-service/builder/types.d.ts'
 import { describe, expectTypeOf, it } from 'vitest'
-import { repository, todos, users } from './schema'
+import { service, todos, users } from './schema'
 
-// Repository instances for type testing
-const userRepository = repository(users)
-const todosRepository = repository(todos, {
+// Service instances for type testing
+const userService = service(users)
+const todosService = service(todos, {
 	soft: {
 		field: 'status',
 		deletedValue: 'canceled',
 	},
 	getSoftDeleted: async () => {
-		return await todosRepository.findBy(
+		return await todosService.findBy(
 			{ status: 'canceled' },
 			{ withDeleted: true },
 		)
@@ -34,71 +34,71 @@ type UserInsert = typeof users.$inferInsert
 type TodoSelect = typeof todos.$inferSelect
 type TodoInsert = typeof todos.$inferInsert
 
-describe('PostgreSQL Repository Types', () => {
-	describe('Base Repository Structure', () => {
-		it('should have correct repository interface structure', () => {
-			expectTypeOf(userRepository).toMatchTypeOf<
-				Repository<UserEntity, PostgresDb>
+describe('PostgreSQL Service Types', () => {
+	describe('Base Service Structure', () => {
+		it('should have correct Service interface structure', () => {
+			expectTypeOf(userService).toMatchTypeOf<
+				Service<UserEntity, PostgresDb>
 			>()
-			expectTypeOf(todosRepository).toMatchTypeOf<
-				Repository<TodoEntity, PostgresDb>
+			expectTypeOf(todosService).toMatchTypeOf<
+				Service<TodoEntity, PostgresDb>
 			>()
 		})
 
 		it('should expose database instance', () => {
-			expectTypeOf(userRepository.db).toMatchTypeOf<PostgresDb>()
-			expectTypeOf(todosRepository.db).toMatchTypeOf<PostgresDb>()
+			expectTypeOf(userService.db).toMatchTypeOf<PostgresDb>()
+			expectTypeOf(todosService.db).toMatchTypeOf<PostgresDb>()
 		})
 
 		it('should expose entity information', () => {
-			expectTypeOf(userRepository.entity).toEqualTypeOf<UserEntity>()
-			expectTypeOf(todosRepository.entity).toEqualTypeOf<TodoEntity>()
-			expectTypeOf(userRepository.entityName).toEqualTypeOf<string>()
-			expectTypeOf(todosRepository.entityName).toEqualTypeOf<string>()
+			expectTypeOf(userService.entity).toEqualTypeOf<UserEntity>()
+			expectTypeOf(todosService.entity).toEqualTypeOf<TodoEntity>()
+			expectTypeOf(userService.entityName).toEqualTypeOf<string>()
+			expectTypeOf(todosService.entityName).toEqualTypeOf<string>()
 		})
 	})
 
 	describe('Query Operations Types', () => {
 		it('should implement QueryOperations interface', () => {
-			expectTypeOf(userRepository).toMatchTypeOf<QueryOperations<UserEntity>>()
-			expectTypeOf(todosRepository).toMatchTypeOf<QueryOperations<TodoEntity>>()
+			expectTypeOf(userService).toMatchTypeOf<QueryOperations<UserEntity>>()
+			expectTypeOf(todosService).toMatchTypeOf<QueryOperations<TodoEntity>>()
 		})
 
 		it('should have correct findAll method types', () => {
-			expectTypeOf(userRepository.findAll).toBeFunction()
-			expectTypeOf(todosRepository.findAll).toBeFunction()
+			expectTypeOf(userService.findAll).toBeFunction()
+			expectTypeOf(todosService.findAll).toBeFunction()
 		})
 
 		it('should have correct findById method types', () => {
-			expectTypeOf(userRepository.findById).toBeFunction()
-			expectTypeOf(todosRepository.findById).toBeFunction()
+			expectTypeOf(userService.findById).toBeFunction()
+			expectTypeOf(todosService.findById).toBeFunction()
 
-			expectTypeOf(userRepository.findById).parameter(0).toEqualTypeOf<number>()
-			expectTypeOf(todosRepository.findById)
+			expectTypeOf(userService.findById).parameter(0).toEqualTypeOf<number>()
+			expectTypeOf(todosService.findById)
 				.parameter(0)
 				.toEqualTypeOf<string>()
 		})
 
 		it('should have correct findBy method types', () => {
-			expectTypeOf(userRepository.findBy).toBeFunction()
-			expectTypeOf(todosRepository.findBy).toBeFunction()
+			expectTypeOf(userService.findBy).toBeFunction()
+			expectTypeOf(todosService.findBy).toBeFunction()
 
-			expectTypeOf(userRepository.findBy)
+			expectTypeOf(userService.findBy)
 				.parameter(0)
 				.toMatchTypeOf<Partial<UserSelect>>()
-			expectTypeOf(todosRepository.findBy)
+			expectTypeOf(todosService.findBy)
 				.parameter(0)
 				.toMatchTypeOf<Partial<TodoSelect>>()
 		})
 
 		it('should have correct findByField method types', () => {
-			expectTypeOf(userRepository.findByField).toBeFunction()
-			expectTypeOf(todosRepository.findByField).toBeFunction()
+			expectTypeOf(userService.findByField).toBeFunction()
+			expectTypeOf(todosService.findByField).toBeFunction()
 
-			expectTypeOf(userRepository.findByField)
+			expectTypeOf(userService.findByField)
 				.parameter(0)
 				.toEqualTypeOf<keyof UserSelect>()
-			expectTypeOf(todosRepository.findByField)
+			expectTypeOf(todosService.findByField)
 				.parameter(0)
 				.toEqualTypeOf<keyof TodoSelect>()
 		})
@@ -106,84 +106,84 @@ describe('PostgreSQL Repository Types', () => {
 
 	describe('Mutation Operations Types', () => {
 		it('should implement MutationOperations interface', () => {
-			expectTypeOf(userRepository).toMatchTypeOf<
+			expectTypeOf(userService).toMatchTypeOf<
 				MutationOperations<UserEntity>
 			>()
-			expectTypeOf(todosRepository).toMatchTypeOf<
+			expectTypeOf(todosService).toMatchTypeOf<
 				MutationOperations<TodoEntity>
 			>()
 		})
 
 		it('should have correct create method types', () => {
-			expectTypeOf(userRepository.create).toBeFunction()
-			expectTypeOf(todosRepository.create).toBeFunction()
+			expectTypeOf(userService.create).toBeFunction()
+			expectTypeOf(todosService.create).toBeFunction()
 
-			expectTypeOf(userRepository.create)
+			expectTypeOf(userService.create)
 				.parameter(0)
 				.toMatchTypeOf<UserInsert>()
-			expectTypeOf(todosRepository.create)
+			expectTypeOf(todosService.create)
 				.parameter(0)
 				.toMatchTypeOf<TodoInsert>()
 
-			expectTypeOf(userRepository.create).returns.toEqualTypeOf<
+			expectTypeOf(userService.create).returns.toEqualTypeOf<
 				Handler<UserSelect>
 			>()
-			expectTypeOf(todosRepository.create).returns.toEqualTypeOf<
+			expectTypeOf(todosService.create).returns.toEqualTypeOf<
 				Handler<TodoSelect>
 			>()
 		})
 
 		it('should have correct update method types', () => {
-			expectTypeOf(userRepository.update).toBeFunction()
-			expectTypeOf(todosRepository.update).toBeFunction()
+			expectTypeOf(userService.update).toBeFunction()
+			expectTypeOf(todosService.update).toBeFunction()
 
-			expectTypeOf(userRepository.update).parameter(0).toEqualTypeOf<number>()
-			expectTypeOf(todosRepository.update).parameter(0).toEqualTypeOf<string>()
-			expectTypeOf(userRepository.update)
+			expectTypeOf(userService.update).parameter(0).toEqualTypeOf<number>()
+			expectTypeOf(todosService.update).parameter(0).toEqualTypeOf<string>()
+			expectTypeOf(userService.update)
 				.parameter(1)
 				.toMatchTypeOf<Partial<Omit<UserInsert, 'createdAt' | 'id'>>>()
-			expectTypeOf(todosRepository.update)
+			expectTypeOf(todosService.update)
 				.parameter(1)
 				.toMatchTypeOf<Partial<Omit<TodoInsert, 'createdAt' | 'id'>>>()
 
-			expectTypeOf(userRepository.update).returns.toEqualTypeOf<
+			expectTypeOf(userService.update).returns.toEqualTypeOf<
 				Handler<UserSelect>
 			>()
-			expectTypeOf(todosRepository.update).returns.toEqualTypeOf<
+			expectTypeOf(todosService.update).returns.toEqualTypeOf<
 				Handler<TodoSelect>
 			>()
 		})
 
 		it('should have correct delete method types', () => {
-			expectTypeOf(userRepository.delete).toBeFunction()
-			expectTypeOf(todosRepository.delete).toBeFunction()
+			expectTypeOf(userService.delete).toBeFunction()
+			expectTypeOf(todosService.delete).toBeFunction()
 
-			expectTypeOf(userRepository.delete).parameter(0).toEqualTypeOf<number>()
-			expectTypeOf(todosRepository.delete).parameter(0).toEqualTypeOf<string>()
+			expectTypeOf(userService.delete).parameter(0).toEqualTypeOf<number>()
+			expectTypeOf(todosService.delete).parameter(0).toEqualTypeOf<string>()
 
-			expectTypeOf(userRepository.delete).returns.toEqualTypeOf<
+			expectTypeOf(userService.delete).returns.toEqualTypeOf<
 				Promise<{ readonly success: boolean; readonly message?: string }>
 			>()
-			expectTypeOf(todosRepository.delete).returns.toEqualTypeOf<
+			expectTypeOf(todosService.delete).returns.toEqualTypeOf<
 				Promise<{ readonly success: boolean; readonly message?: string }>
 			>()
 		})
 
 		it('should have correct hardDelete method types', () => {
-			expectTypeOf(userRepository.hardDelete).toBeFunction()
-			expectTypeOf(todosRepository.hardDelete).toBeFunction()
+			expectTypeOf(userService.hardDelete).toBeFunction()
+			expectTypeOf(todosService.hardDelete).toBeFunction()
 
-			expectTypeOf(userRepository.hardDelete)
+			expectTypeOf(userService.hardDelete)
 				.parameter(0)
 				.toEqualTypeOf<number>()
-			expectTypeOf(todosRepository.hardDelete)
+			expectTypeOf(todosService.hardDelete)
 				.parameter(0)
 				.toEqualTypeOf<string>()
 
-			expectTypeOf(userRepository.hardDelete).returns.toEqualTypeOf<
+			expectTypeOf(userService.hardDelete).returns.toEqualTypeOf<
 				Promise<{ readonly success: boolean; readonly message?: string }>
 			>()
-			expectTypeOf(todosRepository.hardDelete).returns.toEqualTypeOf<
+			expectTypeOf(todosService.hardDelete).returns.toEqualTypeOf<
 				Promise<{ readonly success: boolean; readonly message?: string }>
 			>()
 		})
@@ -191,98 +191,98 @@ describe('PostgreSQL Repository Types', () => {
 
 	describe('Bulk Operations Types', () => {
 		it('should implement MutationsBulkOperations interface', () => {
-			expectTypeOf(userRepository).toMatchTypeOf<
+			expectTypeOf(userService).toMatchTypeOf<
 				MutationsBulkOperations<UserEntity>
 			>()
-			expectTypeOf(todosRepository).toMatchTypeOf<
+			expectTypeOf(todosService).toMatchTypeOf<
 				MutationsBulkOperations<TodoEntity>
 			>()
 		})
 
 		it('should have correct bulkCreate method types', () => {
-			expectTypeOf(userRepository.bulkCreate).toBeFunction()
-			expectTypeOf(todosRepository.bulkCreate).toBeFunction()
+			expectTypeOf(userService.bulkCreate).toBeFunction()
+			expectTypeOf(todosService.bulkCreate).toBeFunction()
 
-			expectTypeOf(userRepository.bulkCreate)
+			expectTypeOf(userService.bulkCreate)
 				.parameter(0)
 				.toEqualTypeOf<UserInsert[]>()
-			expectTypeOf(todosRepository.bulkCreate)
+			expectTypeOf(todosService.bulkCreate)
 				.parameter(0)
 				.toEqualTypeOf<TodoInsert[]>()
-			expectTypeOf(userRepository.bulkCreate)
+			expectTypeOf(userService.bulkCreate)
 				.parameter(1)
-				.toMatchTypeOf<RepositoryHooks<UserEntity> | undefined>()
-			expectTypeOf(todosRepository.bulkCreate)
+				.toMatchTypeOf<ServiceHooks<UserEntity> | undefined>()
+			expectTypeOf(todosService.bulkCreate)
 				.parameter(1)
-				.toMatchTypeOf<RepositoryHooks<TodoEntity> | undefined>()
+				.toMatchTypeOf<ServiceHooks<TodoEntity> | undefined>()
 
-			expectTypeOf(userRepository.bulkCreate).returns.toEqualTypeOf<
+			expectTypeOf(userService.bulkCreate).returns.toEqualTypeOf<
 				Handler<UserSelect[]>
 			>()
-			expectTypeOf(todosRepository.bulkCreate).returns.toEqualTypeOf<
+			expectTypeOf(todosService.bulkCreate).returns.toEqualTypeOf<
 				Handler<TodoSelect[]>
 			>()
 		})
 
 		it('should have correct bulkUpdate method types', () => {
-			expectTypeOf(userRepository.bulkUpdate).toBeFunction()
-			expectTypeOf(todosRepository.bulkUpdate).toBeFunction()
+			expectTypeOf(userService.bulkUpdate).toBeFunction()
+			expectTypeOf(todosService.bulkUpdate).toBeFunction()
 
-			expectTypeOf(userRepository.bulkUpdate).parameter(0).toMatchTypeOf<
+			expectTypeOf(userService.bulkUpdate).parameter(0).toMatchTypeOf<
 				Array<{
 					id: number
 					changes: Partial<Omit<UserInsert, 'createdAt' | 'id'>>
 				}>
 			>()
-			expectTypeOf(todosRepository.bulkUpdate).parameter(0).toMatchTypeOf<
+			expectTypeOf(todosService.bulkUpdate).parameter(0).toMatchTypeOf<
 				Array<{
 					id: string
 					changes: Partial<Omit<TodoInsert, 'createdAt' | 'id'>>
 				}>
 			>()
 
-			expectTypeOf(userRepository.bulkUpdate).returns.toEqualTypeOf<
+			expectTypeOf(userService.bulkUpdate).returns.toEqualTypeOf<
 				Handler<UserSelect[]>
 			>()
-			expectTypeOf(todosRepository.bulkUpdate).returns.toEqualTypeOf<
+			expectTypeOf(todosService.bulkUpdate).returns.toEqualTypeOf<
 				Handler<TodoSelect[]>
 			>()
 		})
 
 		it('should have correct bulkDelete method types', () => {
-			expectTypeOf(userRepository.bulkDelete).toBeFunction()
-			expectTypeOf(todosRepository.bulkDelete).toBeFunction()
+			expectTypeOf(userService.bulkDelete).toBeFunction()
+			expectTypeOf(todosService.bulkDelete).toBeFunction()
 
-			expectTypeOf(userRepository.bulkDelete)
+			expectTypeOf(userService.bulkDelete)
 				.parameter(0)
 				.toEqualTypeOf<number[]>()
-			expectTypeOf(todosRepository.bulkDelete)
+			expectTypeOf(todosService.bulkDelete)
 				.parameter(0)
 				.toEqualTypeOf<string[]>()
 
-			expectTypeOf(userRepository.bulkDelete).returns.toEqualTypeOf<
+			expectTypeOf(userService.bulkDelete).returns.toEqualTypeOf<
 				Promise<{ readonly success: boolean; readonly message?: string }>
 			>()
-			expectTypeOf(todosRepository.bulkDelete).returns.toEqualTypeOf<
+			expectTypeOf(todosService.bulkDelete).returns.toEqualTypeOf<
 				Promise<{ readonly success: boolean; readonly message?: string }>
 			>()
 		})
 
 		it('should have correct bulkHardDelete method types', () => {
-			expectTypeOf(userRepository.bulkHardDelete).toBeFunction()
-			expectTypeOf(todosRepository.bulkHardDelete).toBeFunction()
+			expectTypeOf(userService.bulkHardDelete).toBeFunction()
+			expectTypeOf(todosService.bulkHardDelete).toBeFunction()
 
-			expectTypeOf(userRepository.bulkHardDelete)
+			expectTypeOf(userService.bulkHardDelete)
 				.parameter(0)
 				.toEqualTypeOf<number[]>()
-			expectTypeOf(todosRepository.bulkHardDelete)
+			expectTypeOf(todosService.bulkHardDelete)
 				.parameter(0)
 				.toEqualTypeOf<string[]>()
 
-			expectTypeOf(userRepository.bulkHardDelete).returns.toEqualTypeOf<
+			expectTypeOf(userService.bulkHardDelete).returns.toEqualTypeOf<
 				Promise<{ readonly success: boolean; readonly message?: string }>
 			>()
-			expectTypeOf(todosRepository.bulkHardDelete).returns.toEqualTypeOf<
+			expectTypeOf(todosService.bulkHardDelete).returns.toEqualTypeOf<
 				Promise<{ readonly success: boolean; readonly message?: string }>
 			>()
 		})
@@ -302,27 +302,27 @@ describe('PostgreSQL Repository Types', () => {
 		})
 	})
 
-	describe('Repository Extension Types', () => {
+	describe('Service Extension Types', () => {
 		it('should properly type custom extensions', () => {
 			// Test soft delete extension
-			expectTypeOf(todosRepository.getSoftDeleted).toBeFunction()
-			expectTypeOf(todosRepository.getSoftDeleted).returns.toEqualTypeOf<
+			expectTypeOf(todosService.getSoftDeleted).toBeFunction()
+			expectTypeOf(todosService.getSoftDeleted).returns.toEqualTypeOf<
 				Promise<TodoSelect[]>
 			>()
 		})
 	})
 
-	describe('Generic Repository Builder Types', () => {
-		it('should handle generic repository creation', () => {
-			// Test the repository builder function type
-			expectTypeOf(repository).toBeFunction()
+	describe('Generic Service Builder Types', () => {
+		it('should handle generic Service creation', () => {
+			// Test the Service builder function type
+			expectTypeOf(service).toBeFunction()
 		})
 	})
 
 	describe('Database-Specific Types', () => {
 		it('should use SQLite-specific types', () => {
-			expectTypeOf(userRepository.db).toMatchTypeOf<PostgresDb>()
-			expectTypeOf(todosRepository.db).toMatchTypeOf<PostgresDb>()
+			expectTypeOf(userService.db).toMatchTypeOf<PostgresDb>()
+			expectTypeOf(todosService.db).toMatchTypeOf<PostgresDb>()
 		})
 
 		it('should handle SQLite-specific enum types', () => {
@@ -392,22 +392,22 @@ describe('PostgreSQL Repository Types', () => {
 		})
 	})
 
-	describe('Repository Methods Integration', () => {
-		it('should implement RepositoryMethods interface', () => {
-			expectTypeOf(userRepository).toMatchTypeOf<
-				RepositoryMethods<UserEntity>
+	describe('Service Methods Integration', () => {
+		it('should implement ServiceMethods interface', () => {
+			expectTypeOf(userService).toMatchTypeOf<
+				ServiceMethods<UserEntity>
 			>()
-			expectTypeOf(todosRepository).toMatchTypeOf<
-				RepositoryMethods<TodoEntity>
+			expectTypeOf(todosService).toMatchTypeOf<
+				ServiceMethods<TodoEntity>
 			>()
 		})
 
 		it('should expose underscore methods accessor', () => {
-			expectTypeOf(userRepository._).toMatchTypeOf<
-				RepositoryMethods<UserEntity>
+			expectTypeOf(userService._).toMatchTypeOf<
+				ServiceMethods<UserEntity>
 			>()
-			expectTypeOf(todosRepository._).toMatchTypeOf<
-				RepositoryMethods<TodoEntity>
+			expectTypeOf(todosService._).toMatchTypeOf<
+				ServiceMethods<TodoEntity>
 			>()
 		})
 	})

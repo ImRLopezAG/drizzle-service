@@ -1,5 +1,5 @@
 import { DrizzleQueryError } from 'drizzle-orm/errors'
-import type { Handler, RepositoryBuilderFn } from './types'
+import type { Handler, ServiceBuilderFn } from './types'
 
 // Utility function for error handling
 export async function tryHandler<T>(
@@ -31,10 +31,10 @@ export function getTableName(table: any): string {
 	// Return the value if the symbol exists, otherwise return "unknown"
 	return baseNameSymbol ? table[baseNameSymbol] : 'unknown'
 }
-// Main repository builder function
-export function createRepository<DB>(
-	builderFn: RepositoryBuilderFn<DB>,
-): RepositoryBuilderFn<DB> {
+// Main service builder function
+export function initializeService<DB>(
+	builderFn: ServiceBuilderFn<DB>,
+): ServiceBuilderFn<DB> {
 	return builderFn
 }
 

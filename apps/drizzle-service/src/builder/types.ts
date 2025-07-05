@@ -27,7 +27,7 @@ export type SQLiteQb = SQLiteSelect
 export type PostgresQb = PgSelect
 export type MySqlQb = MySqlSelect
 
-export type RepositoryOptions<
+export type ServiceOptions<
 	T extends BaseEntity,
 	TExtensions = Record<string, unknown>,
 > = {
@@ -45,8 +45,8 @@ export type RepositoryOptions<
 		delete?: <K>(key: K) => void
 	}
 	override?: (
-		baseMethods: RepositoryMethods<T>,
-	) => Partial<RepositoryMethods<T>>
+		baseMethods: ServiceMethods<T>,
+	) => Partial<ServiceMethods<T>>
 } & (T['$inferSelect'] extends { id: string }
 	? {
 			id?: keyof T['$inferSelect'] // Optional if entity has an ID field
@@ -102,50 +102,50 @@ export interface PaginationResult<T> {
 	}
 }
 
-// Repository hooks for lifecycle events
-export interface RepositoryHooks<T extends BaseEntity> {
+// Service hooks for lifecycle events
+export interface ServiceHooks<T extends BaseEntity> {
 	beforeAction?: (data: T['$inferSelect']) => Promise<void>
 	afterAction?: (data: T['$inferSelect']) => Promise<void>
 	onError?: (error: Error) => Promise<void>
 }
 
 /**
- * Interface defining mutation operations for repository entities.
+ * Interface defining mutation operations for service entities.
  * 
  * @template T - The base entity type that extends BaseEntity
- * @template TOpts - Optional repository options that extend RepositoryOptions<T>
+ * @template TOpts - Optional service options that extend ServiceOptions<T>
  */
 export interface MutationOperations<
 	T extends BaseEntity,
-	TOpts extends RepositoryOptions<T> | undefined = undefined,
+	TOpts extends ServiceOptions<T> | undefined = undefined,
 > {
 	/**
-	 * Creates a new entity in the repository.
+	 * Creates a new entity in the service.
 	 * 
 	 * @param data - The data to insert, conforming to the entity's insert schema
-	 * @param hooks - Optional repository hooks to execute during creation
+	 * @param hooks - Optional service hooks to execute during creation
 	 * @param validate - Optional validation function to run on the data before creation
 	 * @returns A handler that resolves to the created entity's select schema
 	 */
 	create: (
 		data: T['$inferInsert'],
-		hooks?: RepositoryHooks<T>,
+		hooks?: ServiceHooks<T>,
 		validate?: (data: T['$inferInsert']) => void,
 	) => Handler<T['$inferSelect']>
 	
 	/**
-	 * Updates an existing entity in the repository.
+	 * Updates an existing entity in the service.
 	 * 
 	 * @param id - The identifier of the entity to update
 	 * @param data - Partial data to update, excluding createdAt and id fields
-	 * @param hooks - Optional repository hooks to execute during update
+	 * @param hooks - Optional service hooks to execute during update
 	 * @param validate - Optional validation function to run on the partial data before update
 	 * @returns A handler that resolves to the updated entity's select schema
 	 */
 	update: (
 		id: IdType<T, TOpts>,
 		data: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>,
-		hooks?: RepositoryHooks<T>,
+		hooks?: ServiceHooks<T>,
 		validate?: (data: Partial<T['$inferInsert']>) => void,
 	) => Handler<T['$inferSelect']>
 	
@@ -153,37 +153,37 @@ export interface MutationOperations<
 	 * Performs a soft delete on an entity (typically marks as deleted without removing from database).
 	 * 
 	 * @param id - The identifier of the entity to soft delete
-	 * @param hooks - Optional repository hooks to execute during deletion
+	 * @param hooks - Optional service hooks to execute during deletion
 	 * @returns A promise that resolves to an object indicating success status and optional message
 	 */
 	delete: (
 		id: IdType<T, TOpts>,
-		hooks?: RepositoryHooks<T>,
+		hooks?: ServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
 	
 	/**
 	 * Performs a hard delete on an entity (permanently removes from database).
 	 * 
 	 * @param id - The identifier of the entity to permanently delete
-	 * @param hooks - Optional repository hooks to execute during hard deletion
+	 * @param hooks - Optional service hooks to execute during hard deletion
 	 * @returns A promise that resolves to an object indicating success status and optional message
 	 */
 	hardDelete: (
 		id: IdType<T, TOpts>,
-		hooks?: RepositoryHooks<T>,
+		hooks?: ServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
 }
 
 /**
- * Interface defining query operations for a repository pattern.
+ * Interface defining query operations for a service pattern.
  * Provides a comprehensive set of methods for retrieving data from a data source.
  * 
  * @template T - The base entity type that extends BaseEntity
- * @template TOpts - Repository options type, defaults to undefined
+ * @template TOpts - Service options type, defaults to undefined
  */
 export interface QueryOperations<
 	T extends BaseEntity,
-	TOpts extends RepositoryOptions<T> | undefined = undefined,
+	TOpts extends ServiceOptions<T> | undefined = undefined,
 > {
 	/**
 	 * Retrieves all entities from the data source.
@@ -311,61 +311,61 @@ export interface QueryOperations<
 
 export interface MutationsBulkOperations<
 	T extends BaseEntity,
-	TOpts extends RepositoryOptions<T> | undefined = undefined,
+	TOpts extends ServiceOptions<T> | undefined = undefined,
 > {
 	bulkCreate: (
 		data: T['$inferInsert'][],
-		hooks?: RepositoryHooks<T>,
+		hooks?: ServiceHooks<T>,
 	) => Handler<T['$inferSelect'][]>
 	bulkUpdate: (
 		data: Array<{
 			id: IdType<T, TOpts>
 			changes: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>
 		}>,
-		hooks?: RepositoryHooks<T>,
+		hooks?: ServiceHooks<T>,
 	) => Handler<T['$inferSelect'][]>
 	bulkDelete: (
 		ids: IdType<T, TOpts>[],
-		hooks?: RepositoryHooks<T>,
+		hooks?: ServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
 	bulkHardDelete: (
 		ids: IdType<T, TOpts>[],
-		hooks?: RepositoryHooks<T>,
+		hooks?: ServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
 }
 
-export interface RepositoryMethods<
+export interface ServiceMethods<
 	T extends BaseEntity,
-	TOpts extends RepositoryOptions<T> | undefined = undefined,
+	TOpts extends ServiceOptions<T> | undefined = undefined,
 > extends MutationOperations<T, TOpts>,
 		QueryOperations<T>,
 		MutationsBulkOperations<T, TOpts> {}
 
-export interface Repository<
+export interface Service<
 	T extends BaseEntity,
 	DB,
-	TOpts extends RepositoryOptions<T> | undefined = undefined,
-> extends RepositoryMethods<T, TOpts> {
+	TOpts extends ServiceOptions<T> | undefined = undefined,
+> extends ServiceMethods<T, TOpts> {
 	readonly db: DB
 	readonly entity: T
 	readonly entityName: string
-	_: RepositoryMethods<T, TOpts>
+	_: ServiceMethods<T, TOpts>
 }
 
-// Repository builder function that each database adapter implements
-export type RepositoryBuilderFn<DB> = <
+// Service builder function that each database adapter implements
+export type ServiceBuilderFn<DB> = <
 	T extends BaseEntity,
 	TExtensions = Record<string, unknown>,
 >(
 	db: DB,
 	entity: T,
-	opts?: RepositoryOptions<T, TExtensions>,
-) => Repository<T, DB> & TExtensions
+	opts?: ServiceOptions<T, TExtensions>,
+) => Service<T, DB> & TExtensions
 
-// Main builder function signature - creates the repository factory
-export type CreateRepositoryBuilder = <DB>(
-	builderFn: RepositoryBuilderFn<DB>,
-) => RepositoryBuilderFn<DB>
+// Main builder function signature - creates the service factory
+export type CreateServiceBuilder = <DB>(
+	builderFn: ServiceBuilderFn<DB>,
+) => ServiceBuilderFn<DB>
 
 // Helper type to extract the table name from a BaseEntity
 type TableName<T extends BaseEntity> = T extends { _: { name: infer N } }

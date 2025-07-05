@@ -1,4 +1,4 @@
-import  { drizzleRepository } from 'drizzle-service/sqlite'
+import  { drizzleService } from 'drizzle-service/sqlite'
 import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
 import { sqliteTable, uniqueIndex } from 'drizzle-orm/sqlite-core'
@@ -95,6 +95,6 @@ const db = drizzle({
 	client,
 })
 
-const repository = drizzleRepository(db)
+const service = drizzleService(db)
 
-export { db, repository, todos, users, tenants }
+export { db, service, todos, users, tenants }

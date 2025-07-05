@@ -1,7 +1,7 @@
 import {
-	createRepository,
 	errorHandler,
 	getTableName,
+	initializeService,
 	tryHandler,
 } from '@/builder'
 import type {
@@ -16,10 +16,10 @@ import type {
 	QueryOperations,
 	QueryOpts,
 	RelationType,
-	Repository,
-	RepositoryHooks,
-	RepositoryMethods,
-	RepositoryOptions,
+	Service,
+	ServiceHooks,
+	ServiceMethods,
+	ServiceOptions,
 	WithRelations,
 } from '@builder/types'
 import {
@@ -35,85 +35,7 @@ import {
 	or,
 } from 'drizzle-orm'
 
-/**
- * Creates a PostgreSQL repository with CRUD operations, pagination, relations, and soft delete support.
- * 
- * @template PostgresDb The database type extending PostgreSQL database schema
- * 
- * @param db - The database instance for executing queries
- * @param table - The table schema definition from Drizzle ORM
- * @param opts - Configuration options for the repository
- * @param opts.caching - Enable caching for query results
- * @param opts.defaultLimit - Default page size for pagination (default: 100)
- * @param opts.maxLimit - Maximum allowed page size (default: 1000)
- * @param opts.override - Function to override or extend default repository methods
- * @param opts.soft - Soft delete configuration with field name and deleted value
- * @param opts.id - Custom ID field name (default: 'id')
- * 
- * @returns A repository instance with the following capabilities:
- * 
- * **Query Operations:**
- * - `findAll<TRels, TResult>(opts?)` - Retrieve all records with optional filtering, pagination, and relations
- * - `findById<TResult>(id)` - Find a single record by ID
- * - `findWithCursor<TRels, TResult>(opts?)` - Cursor-based pagination with metadata
- * - `count<TRels>(criteria?, opts?)` - Count records matching criteria
- * - `findBy<TRels, TResult>(criteria, opts?)` - Find records matching all criteria (AND operation)
- * - `findByMatching<TRels, TResult>(criteria, opts?)` - Find records matching any criteria (OR operation)
- * - `findByField<K, TRels, TResult>(field, value, opts?)` - Find records by specific field value
- * 
- * **Mutation Operations:**
- * - `create(data, hooks?)` - Create a new record with optional lifecycle hooks
- * - `update(id, data, hooks?)` - Update an existing record by ID
- * - `delete(id, hooks?)` - Soft delete a record (requires soft delete configuration)
- * - `hardDelete(id, hooks?)` - Permanently delete a record
- * 
- * **Bulk Operations:**
- * - `bulkCreate(data[], hooks?)` - Create multiple records in a single operation
- * - `bulkUpdate(updates[], hooks?)` - Update multiple records with different changes
- * - `bulkDelete(ids[], hooks?)` - Soft delete multiple records
- * - `bulkHardDelete(ids[], hooks?)` - Permanently delete multiple records
- * 
- * **Features:**
- * - **Soft Delete**: Configurable soft delete with custom field and deleted value
- * - **Pagination**: Offset-based and cursor-based pagination support
- * - **Relations**: Join operations with left, inner, and right join support
- * - **Ordering**: Multi-field sorting with ascending/descending directions
- * - **Workspace Filtering**: Multi-tenant support with workspace-based filtering
- * - **Custom Queries**: Support for custom WHERE conditions
- * - **Lifecycle Hooks**: Before/after action hooks for all mutations
- * - **Type Safety**: Full TypeScript support with inferred types
- * - **Error Handling**: Consistent error handling with success/error patterns
- * 
- * @example
- * ```typescript
- * const userRepository = createPostgresRepository(db, usersTable, {
- *   defaultLimit: 50,
- *   maxLimit: 500,
- *   soft: { field: 'deletedAt', deletedValue: null },
- *   override: (base) => ({
- *     findByEmail: (email: string) => base.findByField('email', email)
- *   })
- * });
- * 
- * // Query with relations and pagination
- * const users = await userRepository.findAll({
- *   relations: [{ table: postsTable, type: 'left', sql: eq(usersTable.id, postsTable.userId) }],
- *   page: 1,
- *   limit: 20,
- *   orderBy: { createdAt: 'desc' }
- * });
- * 
- * // Create with hooks
- * const newUser = await userRepository.create(
- *   { email: 'user@example.com', name: 'John Doe' },
- *   {
- *     beforeAction: (data) => console.log('Creating user:', data),
- *     afterAction: (user) => console.log('Created user:', user.id)
- *   }
- * );
- * ```
- */
-export const createPostgresRepository = createRepository<PostgresDb>(
+export const createPostgresService = initializeService<PostgresDb>(
 	(db, table, opts) => {
 		type D = typeof db
 		type T = typeof table
@@ -444,7 +366,6 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 				opts?: QueryOpts<T, TResult, TRels>,
 			) => {
 				let query = withOpts(createBaseQuery(), opts || {})
-				
 
 				query = query.where(eq(table[field] as SQLWrapper, value))
 				const data = await query
@@ -469,7 +390,7 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 		const _mutationOperations: MutationOperations<T, O> = {
 			create: async (
 				data: T['$inferInsert'],
-				hooks?: RepositoryHooks<T>,
+				hooks?: ServiceHooks<T>,
 			): Handler<T['$inferSelect']> => {
 				return await tryHandler(
 					async () => {
@@ -498,18 +419,19 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 			update: async (
 				id: IdType<T, O>,
 				data: Partial<Omit<T['$inferInsert'], 'id' | 'createdAt'>>,
-				hooks?: RepositoryHooks<T>,
+				hooks?: ServiceHooks<T>,
 			): Handler<T['$inferSelect']> => {
 				return await tryHandler(
 					async () => {
 						const prev = await baseMethods.findById(id)
 						if (!prev) throw new Error(`Entity with id ${id} not found`)
-						
-						if (hooks?.beforeAction) await hooks.beforeAction({
-							...prev,
-							...data,
-						})
-							
+
+						if (hooks?.beforeAction)
+							await hooks.beforeAction({
+								...prev,
+								...data,
+							})
+
 						const idField = getIdField()
 						const [result] = await db
 							.update(table)
@@ -531,7 +453,7 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 				)
 			},
 
-			delete: async (id: IdType<T, O>, hooks?: RepositoryHooks<T>) => {
+			delete: async (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
 				const [error] = await tryHandler(async () => {
 					const data = await baseMethods.findById(id)
 					if (!data) throw new Error(`Entity with id ${id} not found`)
@@ -575,7 +497,7 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 				}
 			},
 
-			hardDelete: async (id: IdType<T, O>, hooks?: RepositoryHooks<T>) => {
+			hardDelete: async (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
 				const [error] = await tryHandler(async () => {
 					const data = await baseMethods.findById(id)
 					if (!data) throw new Error(`Entity with id ${id} not found`)
@@ -604,7 +526,7 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 		const _bulkOperations: MutationsBulkOperations<T, O> = {
 			bulkCreate: async (
 				data: T['$inferInsert'][],
-				hooks?: RepositoryHooks<T> | undefined,
+				hooks?: ServiceHooks<T> | undefined,
 			): Handler<T['$inferSelect'][]> => {
 				return await tryHandler(
 					async () => {
@@ -624,7 +546,7 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 					id: IdType<T, O>
 					changes: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>
 				}[],
-				hooks?: RepositoryHooks<T> | undefined,
+				hooks?: ServiceHooks<T> | undefined,
 			): Handler<T['$inferSelect'][]> => {
 				return await tryHandler(
 					async () => {
@@ -656,7 +578,7 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 			},
 			bulkDelete: async (
 				ids: IdType<T, O>[],
-				hooks?: RepositoryHooks<T> | undefined,
+				hooks?: ServiceHooks<T> | undefined,
 			): Promise<{ readonly success: boolean; readonly message?: string }> => {
 				const [error] = await tryHandler(async () => {
 					const idField = getIdField()
@@ -710,7 +632,7 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 			},
 			bulkHardDelete: async (
 				ids: IdType<T, O>[],
-				hooks?: RepositoryHooks<T> | undefined,
+				hooks?: ServiceHooks<T> | undefined,
 			): Promise<{ readonly success: boolean; readonly message?: string }> => {
 				const [error] = await tryHandler(async () => {
 					const idField = getIdField()
@@ -739,19 +661,19 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 			},
 		}
 
-		const baseMethods: RepositoryMethods<T, O> = {
+		const baseMethods: ServiceMethods<T, O> = {
 			..._queryOperations,
 			..._mutationOperations,
 			..._bulkOperations,
 		}
 
-		const baseRepository = {
+		const baseService = {
 			...baseMethods,
 			...(override ? override(baseMethods) : {}),
 		}
 
-		const repository: Repository<T, D> = {
-			...baseRepository,
+		const service: Service<T, D> = {
+			...baseService,
 			_: baseMethods,
 			entityName: entityName,
 			db,
@@ -759,27 +681,26 @@ export const createPostgresRepository = createRepository<PostgresDb>(
 		}
 
 		return {
-			...repository,
+			...service,
 			...rest,
-		} as Repository<T, D> & O
+		} as Service<T, D> & O
 	},
 )
 
-export function drizzleRepository<D extends PostgresDb>(
+export function drizzleService<D extends PostgresDb>(
 	db: D,
 ): <
 	T extends BaseEntity,
 	TExtensions extends Record<string, unknown> = Record<string, unknown>,
 >(
 	table: T,
-	opts?: RepositoryOptions<T, TExtensions>,
-) => Repository<T, D> & TExtensions {
+	opts?: ServiceOptions<T, TExtensions>,
+) => Service<T, D> & TExtensions {
 	return <
 		T extends BaseEntity,
 		TExtensions extends Record<string, unknown> = Record<string, unknown>,
 	>(
 		table: T,
-		opts?: RepositoryOptions<T, TExtensions>,
-	) =>
-		createPostgresRepository(db, table, opts) as Repository<T, D> & TExtensions
+		opts?: ServiceOptions<T, TExtensions>,
+	) => createPostgresService(db, table, opts) as Service<T, D> & TExtensions
 }
