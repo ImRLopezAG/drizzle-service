@@ -1,4 +1,11 @@
-# 🛡️ Drizzle Service
+<div align="center">
+  <img src="https://raw.githubusercontent.com/drizzle-team/drizzle-orm/ac1dcd9d1c4b8f171479af4a5dd731db1e164f58/misc/readme/logo-github-sq-dark.svg" alt="Drizzle Service Logo" width="200" />
+  <img src="https://raw.githubusercontent.com/drizzle-team/drizzle-orm/ac1dcd9d1c4b8f171479af4a5dd731db1e164f58/misc/readme/logo-github-sq-light.svg" alt="Drizzle Service Logo" width="200" />
+</div>
+
+<br />
+
+# Drizzle Service
 
 A powerful, type-safe service layer library for [Drizzle ORM](https://orm.drizzle.team/) that provides advanced CRUD operations, pagination, soft deletes, relations, and bulk operations for **PostgreSQL** and **SQLite**.
 
