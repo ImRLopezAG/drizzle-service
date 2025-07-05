@@ -6,7 +6,7 @@ A powerful, type-safe service layer library for [Drizzle ORM](https://orm.drizzl
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/ImRLopezAG/drizzle-service/ci.yml?branch=main)](https://github.com/ImRLopezAG/drizzle-service/actions)
-
+[![Release Status](https://img.shields.io/github/actions/workflow/status/ImRLopezAG/drizzle-service/cd.yml?branch=main)](https://github.com/ImRLopezAG/drizzle-service/actions)
 
 ## ✨ Features
 
