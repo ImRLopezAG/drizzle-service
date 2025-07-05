@@ -5,8 +5,10 @@
   "version": "0.1.0",
   "scripts": {
     "build": "turbo build",
+    "build:lib": "turbo build --filter=drizzle-service",
     "test": "turbo test",
     "lint": "turbo lint",
+    "dev": "turbo dev",
     "lint:unsafe": "turbo lint:unsafe",
     "lint:write": "turbo lint:write",
     "db:push": "turbo db:push",
