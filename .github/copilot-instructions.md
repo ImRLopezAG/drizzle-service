@@ -10,3 +10,5 @@ applyTo: '**/*.ts,**/*.tsx,**/*.mdx'
 
 - for the icons we will use the `lucide` icon library, you can find the icons [here](https://lucide.dev/icons).
 
+- For the test each method should have a test that covers the basic functionality and edge cases. The tests should be written in a way that is easy to understand and follow. the tests should be written in `vitest` and should be placed in the `packages/test/tests/<dbprovider>` folder. The tests should be organized by operation and should include examples of how to use the methods.
+

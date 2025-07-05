@@ -1,0 +1,53 @@
+name: Continuous Deployment
+
+on:
+  workflow_run:
+    workflows: ["Continuous Integration"]
+    branches: [main]
+    types: 
+      - completed
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'apps/drizzle-service/package.json')
+    steps:
+      # Remove the version check steps since we're already filtering
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v4
+          
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org/'
+          cache: 'pnpm'
+          
+      - name: Check for changes in package.json
+        id: check_changes
+        run: |
+          # Check if HEAD^ exists, if not this might be the first commit
+          if ! git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            echo "No previous commit found (possibly first commit), proceeding with publish."
+            echo "publish=true" >> $GITHUB_OUTPUT
+          else
+            VERSION_CHANGED=$(git diff HEAD^ HEAD -- 'apps/drizzle-service/package.json' | grep '"version":' || true)
+            if [ -z "$VERSION_CHANGED" ]; then
+              echo "No version change detected, skipping publish."
+              echo "publish=false" >> $GITHUB_OUTPUT
+            else
+              echo "Version change detected, proceeding with publish."
+              echo "publish=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+          
+      - name: Publish package
+        if: steps.check_changes.outputs.publish == 'true'
+        working-directory: apps/drizzle-service
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          pnpm publish --access public
