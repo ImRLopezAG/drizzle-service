@@ -1,7 +1,7 @@
-import { drizzleService } from 'drizzle-service/pg'
+import { PGlite } from '@electric-sql/pglite'
 import { pgEnum, pgTableCreator, uniqueIndex } from 'drizzle-orm/pg-core'
-import { drizzle } from 'drizzle-orm/postgres-js'
-import postgres from 'postgres'
+import { drizzle } from 'drizzle-orm/pglite'
+import { drizzleService } from 'drizzle-service/pg'
 
 const pgTable = pgTableCreator((name) => `ps_${name}`)
 
@@ -20,12 +20,13 @@ const tenants = pgTable('tenants', (t) => ({
 	name: t.text('name').notNull(),
 	createdAt: t
 		.timestamp('created_at')
-		.notNull()		.$defaultFn(() => new Date()),
+		.notNull()
+		.$defaultFn(() => new Date()),
 	updatedAt: t
 		.timestamp('updated_at')
 		.notNull()
 		.$defaultFn(() => new Date())
-		.$onUpdateFn(() => new Date())
+		.$onUpdateFn(() => new Date()),
 }))
 
 const users = pgTable('users', (t) => ({
@@ -81,7 +82,7 @@ const todos = pgTable(
 
 // process.loadEnvFile('.env.test')
 
-const client = postgres(process.env.DATABASE_URL ?? '')
+const client = new PGlite('./test/postgres/db.sql')
 const db = drizzle({
 	schema: {
 		statusEnum,
@@ -95,4 +96,4 @@ const db = drizzle({
 
 const service = drizzleService(db)
 
-export { db, service, todos, users, tenants }
+export { db, service, tenants, todos, users }

@@ -1,11 +1,11 @@
 import { defineConfig } from 'drizzle-kit'
-process.loadEnvFile()
 export default defineConfig({
 	dialect: 'postgresql',
-	dbCredentials: {
-		url: process.env.DATABASE_URL ?? '',
-	},
+	driver: 'pglite',
 	verbose: true,
+	dbCredentials: {
+		url: 'file:./test/postgres/db.sql',
+	},
 	casing: 'snake_case',
 	schema: './test/postgres/schema.ts',
 	out: './drizzle',
