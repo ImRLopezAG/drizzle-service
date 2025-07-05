@@ -1,0 +1,401 @@
+---
+title: Query Operations
+description: Learn about all the query operations available in Drizzle Service for retrieving data.
+---
+
+import { Banner } from 'fumadocs-ui/components/banner'
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Step, Steps } from 'fumadocs-ui/components/steps'
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
+import { TypeTable } from 'fumadocs-ui/components/type-table'
+
+# Query Operations
+
+Drizzle Service provides powerful query operations for retrieving data from your database. All operations are type-safe and support advanced features like pagination, relations, and custom filtering.
+
+## Basic Query Operations
+
+### findAll()
+
+Retrieves all records from a table with optional filtering, pagination, and relations.
+
+### Method Signature
+
+```typescript
+findAll: <TResult = T['$inferSelect'][], TRels extends WithRelations[] = []>(
+  options?: QueryOpts<T, TResult, TRels>
+) => Promise<TResult>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    options: {
+      description: 'Optional query configuration including pagination, filtering, and relations.',
+      type: 'QueryOpts<T, TResult, TRels>',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### Return Type
+
+<TypeTable
+  type={{
+    Promise: {
+      description: 'Promise that resolves to an array of entities or transformed results.',
+      type: 'Promise<TResult>'
+    }
+  }}
+/>
+
+### findById()
+
+Retrieves a single record by its unique identifier.
+
+### Method Signature
+
+```typescript
+findById: <TResult = T['$inferSelect']>(
+  id: IdType<T, TOpts>,
+  options?: Omit<QueryOpts<T, TResult>, 'page' | 'limit'>
+) => Promise<TResult | null>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    id: {
+      description: 'The unique identifier of the entity to retrieve.',
+      type: 'IdType<T, TOpts>'
+    },
+    options: {
+      description: 'Optional query configuration excluding pagination options.',
+      type: 'Omit<QueryOpts<T, TResult>, "page" | "limit">',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### Return Type
+
+<TypeTable
+  type={{
+    Promise: {
+      description: 'Promise that resolves to the entity or null if not found.',
+      type: 'Promise<TResult | null>'
+    }
+  }}
+/>
+
+## Filtering Operations
+
+### findBy()
+
+Finds records that match all specified criteria (AND conditions).
+
+### Method Signature
+
+```typescript
+findBy: <TResult = T['$inferSelect'][], TRels extends WithRelations[] = []>(
+  criteria: Partial<T['$inferSelect']>,
+  options?: QueryOpts<T, TResult, TRels>
+) => Promise<TResult>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    criteria: {
+      description: 'Object containing field-value pairs for filtering (AND conditions).',
+      type: 'Partial<T["$inferSelect"]>'
+    },
+    options: {
+      description: 'Optional query configuration.',
+      type: 'QueryOpts<T, TResult, TRels>',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### findByMatching()
+
+Finds records that match any of the specified criteria (OR conditions).
+
+### Method Signature
+
+```typescript
+findByMatching: <TResult = T['$inferSelect'][], TRels extends WithRelations[] = []>(
+  criteria: Partial<T['$inferSelect']>,
+  options?: QueryOpts<T, TResult, TRels>
+) => Promise<TResult>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    criteria: {
+      description: 'Object containing field-value pairs for filtering (OR conditions).',
+      type: 'Partial<T["$inferSelect"]>'
+    },
+    options: {
+      description: 'Optional query configuration.',
+      type: 'QueryOpts<T, TResult, TRels>',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### findByField()
+
+Searches for records by a specific field and value.
+
+### Method Signature
+
+```typescript
+findByField: <TResult = T['$inferSelect'][], TRels extends WithRelations[] = []>(
+  field: keyof T['$inferSelect'],
+  value: T['$inferSelect'][keyof T['$inferSelect']],
+  options?: QueryOpts<T, TResult, TRels>
+) => Promise<TResult>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    field: {
+      description: 'The field name to search by.',
+      type: 'keyof T["$inferSelect"]'
+    },
+    value: {
+      description: 'The value to search for in the specified field.',
+      type: 'T["$inferSelect"][keyof T["$inferSelect"]]'
+    },
+    options: {
+      description: 'Optional query configuration.',
+      type: 'QueryOpts<T, TResult, TRels>',
+      default: 'undefined'
+    }
+  }}
+/>
+
+## Pagination Operations
+
+### findWithCursor()
+
+Implements cursor-based pagination for efficient large dataset traversal.
+
+### Method Signature
+
+```typescript
+findWithCursor: <TResult = T['$inferSelect'][], TRels extends WithRelations[] = []>(
+  options?: QueryOpts<T, TResult, TRels>
+) => Promise<{
+  items: TResult
+  nextCursor: Date | null
+  pagination: { hasNext: boolean; limit: number }
+}>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    options: {
+      description: 'Query configuration including cursor and limit.',
+      type: 'QueryOpts<T, TResult, TRels>',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### Return Type
+
+<TypeTable
+  type={{
+    items: {
+      description: 'Array of entities for the current page.',
+      type: 'TResult'
+    },
+    nextCursor: {
+      description: 'Cursor for the next page, null if no more pages.',
+      type: 'Date | null'
+    },
+    pagination: {
+      description: 'Pagination metadata.',
+      type: '{ hasNext: boolean; limit: number }'
+    }
+  }}
+/>
+
+## Aggregation Operations
+
+### count()
+
+Counts records matching specified criteria.
+
+### Method Signature
+
+```typescript
+count: (
+  criteria?: Partial<T['$inferSelect']>,
+  options?: Omit<QueryOpts<T>, 'page' | 'limit' | 'orderBy' | 'parse'>
+) => Promise<number>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    criteria: {
+      description: 'Optional filtering criteria for counting.',
+      type: 'Partial<T["$inferSelect"]>',
+      default: 'undefined'
+    },
+    options: {
+      description: 'Optional query configuration excluding pagination and parsing.',
+      type: 'Omit<QueryOpts<T>, "page" | "limit" | "orderBy" | "parse">',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### Return Type
+
+<TypeTable
+  type={{
+    Promise: {
+      description: 'Promise that resolves to the count of matching records.',
+      type: 'Promise<number>'
+    }
+  }}
+/>
+
+## Configuration Types
+
+### QueryOpts Interface
+
+Comprehensive configuration options for all query operations.
+
+<TypeTable
+  type={{
+    page: {
+      description: 'Page number for offset-based pagination (1-based).',
+      type: 'number',
+      default: '1'
+    },
+    limit: {
+      description: 'Maximum number of records to return.',
+      type: 'number',
+      default: '50'
+    },
+    orderBy: {
+      description: 'Sort configuration by field and direction.',
+      type: '{ [P in keyof T["$inferSelect"]]?: "asc" | "desc" }',
+      default: 'undefined'
+    },
+    withDeleted: {
+      description: 'Include soft-deleted records in results.',
+      type: 'boolean',
+      default: 'false'
+    },
+    cursor: {
+      description: 'Cursor value for cursor-based pagination.',
+      type: 'Date | null',
+      default: 'null'
+    },
+    relations: {
+      description: 'Array of table relations to join.',
+      type: 'TRels',
+      default: 'undefined'
+    },
+    workspace: {
+      description: 'Multi-tenant filtering configuration.',
+      type: '{ field: keyof T["$inferSelect"]; value: any }',
+      default: 'undefined'
+    },
+    custom: {
+      description: 'Custom SQL conditions using Drizzle builders.',
+      type: 'SQL',
+      default: 'undefined'
+    },
+    parse: {
+      description: 'Transform function for result data.',
+      type: '(data: TResult) => TResult',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### WithRelations Interface
+
+Configuration for joining related tables.
+
+<TypeTable
+  type={{
+    table: {
+      description: 'The table to join with.',
+      type: 'PgTable | SQLiteTable',
+      required: true
+    },
+    type: {
+      description: 'Type of join to perform.',
+      type: '"left" | "right" | "inner" | "full"',
+      required: true
+    },
+    sql: {
+      description: 'SQL condition for the join using Drizzle builders.',
+      type: 'SQL',
+      required: true
+    }
+  }}
+/>
+
+## Query Execution Flow
+
+<Steps>
+  <Step>
+    **Parameter Validation**
+    
+    Validate input parameters and options for correctness.
+  </Step>
+
+  <Step>
+    **Query Building**
+    
+    Construct the SQL query using Drizzle ORM builders.
+  </Step>
+
+  <Step>
+    **Relation Joins**
+    
+    Apply any specified table relations and joins.
+  </Step>
+
+  <Step>
+    **Filtering & Sorting**
+    
+    Apply criteria, custom conditions, and ordering.
+  </Step>
+
+  <Step>
+    **Pagination**
+    
+    Apply offset-based or cursor-based pagination.
+  </Step>
+
+  <Step>
+    **Result Transformation**
+    
+    Apply parse function if specified for data transformation.
+  </Step>
+</Steps>
+
+<Callout type="info">
+All query operations return properly typed results based on your Drizzle schema. The TypeScript compiler will catch type errors at compile time, ensuring runtime safety.
+</Callout>

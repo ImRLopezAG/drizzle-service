@@ -1,0 +1,363 @@
+---
+title: Bulk Operations
+description: Efficiently handle multiple records with bulk create, update, and delete operations.
+---
+
+import { Banner } from 'fumadocs-ui/components/banner'
+import { Callout } from 'fumadocs-ui/components/callout'
+import { Step, Steps } from 'fumadocs-ui/components/steps'
+import { TypeTable } from 'fumadocs-ui/components/type-table'
+
+
+Drizzle Service provides powerful bulk operations for efficiently handling multiple records in single database transactions. These operations are essential for performance when working with large datasets or batch processing scenarios.
+
+
+## Bulk Create Operations
+
+### bulkCreate()
+
+Creates multiple entities in a single database transaction with optional validation and lifecycle hooks.
+
+### Method Signature
+
+```typescript
+bulkCreate: (
+  data: T['$inferInsert'][],
+  hooks?: ServiceHooks<T>,
+) => Handler<T['$inferSelect'][]>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    data: {
+      description: 'Array of data objects to insert, each conforming to the entity\'s insert schema.',
+      type: 'T["$inferInsert"][]'
+    },
+    hooks: {
+      description: 'Optional service hooks to execute during bulk creation.',
+      type: 'ServiceHooks<T>',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### Return Type
+
+<TypeTable
+  type={{
+    Handler: {
+      description: 'Promise that resolves to either an error or array of created entities.',
+      type: 'Promise<[Error, null] | [null, T["$inferSelect"][]]>'
+    }
+  }}
+/>
+
+## Bulk Update Operations
+
+### bulkUpdate()
+
+Updates multiple existing entities with different changes for each record.
+
+### Method Signature
+
+```typescript
+bulkUpdate: (
+  updates: Array<{
+    id: IdType<T, TOpts>
+    changes: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>
+  }>,
+  hooks?: ServiceHooks<T>,
+) => Handler<T['$inferSelect'][]>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    updates: {
+      description: 'Array of update objects, each containing an ID and changes to apply.',
+      type: 'Array<{ id: IdType<T, TOpts>; changes: Partial<Omit<T["$inferInsert"], "createdAt" | "id">> }>'
+    },
+    hooks: {
+      description: 'Optional service hooks to execute during bulk update.',
+      type: 'ServiceHooks<T>',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### Return Type
+
+<TypeTable
+  type={{
+    Handler: {
+      description: 'Promise that resolves to either an error or array of updated entities.',
+      type: 'Promise<[Error, null] | [null, T["$inferSelect"][]]>'
+    }
+  }}
+/>
+
+### Update Object Structure
+
+<TypeTable
+  type={{
+    id: {
+      description: 'The identifier of the entity to update.',
+      type: 'IdType<T, TOpts>',
+      required: true
+    },
+    changes: {
+      description: 'Partial data to update, excluding createdAt and id fields.',
+      type: 'Partial<Omit<T["$inferInsert"], "createdAt" | "id">>',
+      required: true
+    }
+  }}
+/>
+
+## Bulk Delete Operations
+
+### bulkDelete()
+
+Performs soft delete on multiple entities (marks as deleted without removing from database).
+
+### Method Signature
+
+```typescript
+bulkDelete: (
+  ids: IdType<T, TOpts>[],
+  hooks?: ServiceHooks<T>,
+) => Promise<{ readonly success: boolean; readonly message?: string }>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    ids: {
+      description: 'Array of identifiers for entities to soft delete.',
+      type: 'IdType<T, TOpts>[]'
+    },
+    hooks: {
+      description: 'Optional service hooks to execute during bulk deletion.',
+      type: 'ServiceHooks<T>',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### Return Type
+
+<TypeTable
+  type={{
+    success: {
+      description: 'Boolean indicating if the bulk operation was successful.',
+      type: 'boolean'
+    },
+    message: {
+      description: 'Optional descriptive message about the operation result.',
+      type: 'string',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### bulkHardDelete()
+
+Permanently removes multiple entities from the database.
+
+### Method Signature
+
+```typescript
+bulkHardDelete: (
+  ids: IdType<T, TOpts>[],
+  hooks?: ServiceHooks<T>,
+) => Promise<{ readonly success: boolean; readonly message?: string }>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    ids: {
+      description: 'Array of identifiers for entities to permanently delete.',
+      type: 'IdType<T, TOpts>[]'
+    },
+    hooks: {
+      description: 'Optional service hooks to execute during bulk hard deletion.',
+      type: 'ServiceHooks<T>',
+      default: 'undefined'
+    }
+  }}
+/>
+
+## Error Handling
+
+### Handler Pattern
+
+All bulk mutation operations return a `Handler<T[]>` type for consistent error handling.
+
+### Handler Type
+
+<TypeTable
+  type={{
+    Handler: {
+      description: 'Promise that resolves to either an error tuple or success tuple.',
+      type: 'Promise<[Error, null] | [null, T[]]>'
+    }
+  }}
+/>
+
+### Error Tuple Structure
+
+<TypeTable
+  type={{
+    'Error Case': {
+      description: 'When operation fails, returns error in first position.',
+      type: '[Error, null]'
+    },
+    'Success Case': {
+      description: 'When operation succeeds, returns result array in second position.',
+      type: '[null, T[]]'
+    }
+  }}
+/>
+
+## Configuration Types
+
+### ServiceHooks
+
+All bulk operations support lifecycle hooks for custom logic execution.
+
+<TypeTable
+  type={{
+    beforeAction: {
+      description: 'Execute custom logic before the database operation.',
+      type: '(data: T["$inferSelect"][] | IdType<T, TOpts>[]) => Promise<void>',
+      default: 'undefined'
+    },
+    afterAction: {
+      description: 'Execute custom logic after successful database operation.',
+      type: '(data: T["$inferSelect"][] | IdType<T, TOpts>[]) => Promise<void>',
+      default: 'undefined'
+    },
+    onError: {
+      description: 'Execute custom error handling when operation fails.',
+      type: '(error: Error) => Promise<void>',
+      default: 'undefined'
+    }
+  }}
+/>
+
+### Hook Execution Order
+
+<Steps>
+  <Step>
+    **beforeAction** hook
+    
+    Pre-processing logic, validation, or setup operations for the entire batch.
+  </Step>
+
+  <Step>
+    **Database operation**
+    
+    The actual bulk create, update, or delete operation is performed.
+  </Step>
+
+  <Step>
+    **afterAction** hook (on success)
+    
+    Post-processing logic, notifications, or cleanup operations.
+  </Step>
+
+  <Step>
+    **onError** hook (on failure)
+    
+    Error handling, logging, or rollback operations.
+  </Step>
+</Steps>
+
+## Performance Considerations
+
+### Batch Size Recommendations
+
+<TypeTable
+  type={{
+    'Small Operations': {
+      description: 'Simple creates/updates with minimal validation.',
+      type: '500-1000 records',
+      default: 'Recommended for basic operations'
+    },
+    'Complex Operations': {
+      description: 'Operations with extensive validation or hooks.',
+      type: '50-200 records',
+      default: 'Safer for resource-intensive operations'
+    },
+    'Memory Constrained': {
+      description: 'Limited memory environments or large record sizes.',
+      type: '10-100 records',
+      default: 'Conservative approach for stability'
+    }
+  }}
+/>
+
+### Transaction Behavior
+
+<TypeTable
+  type={{
+    Atomicity: {
+      description: 'All records in a bulk operation succeed or fail together.',
+      type: 'boolean',
+      default: 'true'
+    },
+    Isolation: {
+      description: 'Bulk operations respect database isolation levels.',
+      type: 'READ_COMMITTED | SERIALIZABLE',
+      default: 'READ_COMMITTED'
+    },
+    Rollback: {
+      description: 'Automatic rollback on any failure within the batch.',
+      type: 'boolean',
+      default: 'true'
+    }
+  }}
+/>
+
+## Data Validation
+
+### Validation Strategy
+
+<Steps>
+  <Step>
+    **Input Validation**
+    
+    Validate array structure and individual record schemas.
+  </Step>
+
+  <Step>
+    **Business Rules**
+    
+    Apply business logic validation in beforeAction hooks.
+  </Step>
+
+  <Step>
+    **Database Constraints**
+    
+    Let database enforce final constraints and uniqueness.
+  </Step>
+
+  <Step>
+    **Error Aggregation**
+    
+    Collect and report all validation errors together.
+  </Step>
+</Steps>
+
+<Callout type="warn">
+Bulk operations preserve original `createdAt` timestamps but automatically update `updatedAt` fields for all modified records. The `beforeAction` hook receives the full data array, allowing for cross-record validation.
+</Callout>
+
+<Callout type="info">
+All bulk operations are atomic within their scope. For atomicity across multiple bulk operations, implement custom transaction management or rollback logic in error handlers.
+</Callout>
