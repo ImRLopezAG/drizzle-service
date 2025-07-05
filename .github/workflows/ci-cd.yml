@@ -3,6 +3,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'apps/drizzle-service/package.json'
+      - 'packages/**'
+      - 'apps/drizzle-service/src/**'
+
 jobs:
   test:
     name: Testing SQLite
@@ -59,13 +64,11 @@ jobs:
     name: Publish to npm
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    # Ensure this job only runs when the package version has changed
-  
+    # Only run if package.json was modified
+    if: contains(github.event.head_commit.modified, 'apps/drizzle-service/package.json')
     steps:
+      # Remove the version check steps since we're already filtering
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2  # Fetch at least 2 commits to have HEAD^ available
       
       - uses: pnpm/action-setup@v4
           
@@ -101,4 +104,3 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
           pnpm publish --access public
-        
