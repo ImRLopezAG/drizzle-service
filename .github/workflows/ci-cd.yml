@@ -5,7 +5,7 @@ on:
       - main
 jobs:
   test:
-    name: Testing with Postgres and SQLite
+    name: Testing SQLite
     runs-on: ubuntu-latest
     # services:
     #   postgres:
@@ -43,7 +43,7 @@ jobs:
           echo "DATABASE_URL=$DATABASE_URL" > packages/test/.env
           
       - name: Run build
-        run: pnpm build
+        run: pnpm build:lib
       - name: Push database schema
         # env:
         #   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
