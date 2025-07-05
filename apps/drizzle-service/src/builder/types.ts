@@ -27,26 +27,58 @@ export type SQLiteQb = SQLiteSelect
 export type PostgresQb = PgSelect
 export type MySqlQb = MySqlSelect
 
+// Special marker type for timestamp-based soft deletes
+export type SoftDeleteTimestampMarker = 'NOT_NULL'
+
+// Soft delete configuration with type-safe constraints
+type SoftDeleteConfig<
+	T extends BaseEntity,
+	K extends keyof T['$inferSelect'],
+> = {
+	readonly field: K
+} & // For boolean fields: deletedValue is required, notDeletedValue is optional (defaults to opposite)
+(T['$inferSelect'][K] extends boolean
+	? {
+			readonly deletedValue: boolean
+			readonly notDeletedValue?: boolean
+		}
+	: // For timestamp fields - match exact Date type but exclude Date | null from this branch
+		[T['$inferSelect'][K]] extends [Date]
+		? {
+				readonly deletedValue: Date | SoftDeleteTimestampMarker
+				readonly notDeletedValue?: Date | null
+			}
+		: // For nullable timestamp fields (Date | null)
+			T['$inferSelect'][K] extends Date | null
+			? {
+					readonly deletedValue: Date | SoftDeleteTimestampMarker | null
+					readonly notDeletedValue?: Date | null
+				}
+			: // For all other types (enums, strings, etc): both values are required
+				{
+					readonly deletedValue: T['$inferSelect'][K]
+					readonly notDeletedValue: T['$inferSelect'][K]
+				})
+
+// Helper type to properly distribute the union for soft delete config
+type SoftDeleteOption<T extends BaseEntity> = {
+	[K in keyof T['$inferSelect']]: SoftDeleteConfig<T, K>
+}[keyof T['$inferSelect']]
+
 export type ServiceOptions<
 	T extends BaseEntity,
 	TExtensions = Record<string, unknown>,
 > = {
 	readonly defaultLimit?: number
 	readonly maxLimit?: number
-	readonly soft?: {
-		readonly field: keyof T['$inferSelect']
-		readonly deletedValue: T['$inferSelect'][keyof T['$inferSelect']]
-		readonly notDeletedValue?: T['$inferSelect'][keyof T['$inferSelect']]
-	}
+	readonly soft?: SoftDeleteOption<T>
 	caching?: {
 		get?: <K, V>(key: K) => V | null
 		set?: <K, V>(key: K, value: V, ttl?: number) => void
 		clear?: () => void
 		delete?: <K>(key: K) => void
 	}
-	override?: (
-		baseMethods: ServiceMethods<T>,
-	) => Partial<ServiceMethods<T>>
+	override?: (baseMethods: ServiceMethods<T>) => Partial<ServiceMethods<T>>
 } & (T['$inferSelect'] extends { id: string }
 	? {
 			id?: keyof T['$inferSelect'] // Optional if entity has an ID field
@@ -111,7 +143,7 @@ export interface ServiceHooks<T extends BaseEntity> {
 
 /**
  * Interface defining mutation operations for service entities.
- * 
+ *
  * @template T - The base entity type that extends BaseEntity
  * @template TOpts - Optional service options that extend ServiceOptions<T>
  */
@@ -121,7 +153,7 @@ export interface MutationOperations<
 > {
 	/**
 	 * Creates a new entity in the service.
-	 * 
+	 *
 	 * @param data - The data to insert, conforming to the entity's insert schema
 	 * @param hooks - Optional service hooks to execute during creation
 	 * @param validate - Optional validation function to run on the data before creation
@@ -130,12 +162,11 @@ export interface MutationOperations<
 	create: (
 		data: T['$inferInsert'],
 		hooks?: ServiceHooks<T>,
-		validate?: (data: T['$inferInsert']) => void,
 	) => Handler<T['$inferSelect']>
-	
+
 	/**
 	 * Updates an existing entity in the service.
-	 * 
+	 *
 	 * @param id - The identifier of the entity to update
 	 * @param data - Partial data to update, excluding createdAt and id fields
 	 * @param hooks - Optional service hooks to execute during update
@@ -146,12 +177,10 @@ export interface MutationOperations<
 		id: IdType<T, TOpts>,
 		data: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>,
 		hooks?: ServiceHooks<T>,
-		validate?: (data: Partial<T['$inferInsert']>) => void,
 	) => Handler<T['$inferSelect']>
-	
 	/**
 	 * Performs a soft delete on an entity (typically marks as deleted without removing from database).
-	 * 
+	 *
 	 * @param id - The identifier of the entity to soft delete
 	 * @param hooks - Optional service hooks to execute during deletion
 	 * @returns A promise that resolves to an object indicating success status and optional message
@@ -160,10 +189,10 @@ export interface MutationOperations<
 		id: IdType<T, TOpts>,
 		hooks?: ServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
-	
+
 	/**
 	 * Performs a hard delete on an entity (permanently removes from database).
-	 * 
+	 *
 	 * @param id - The identifier of the entity to permanently delete
 	 * @param hooks - Optional service hooks to execute during hard deletion
 	 * @returns A promise that resolves to an object indicating success status and optional message
@@ -172,12 +201,23 @@ export interface MutationOperations<
 		id: IdType<T, TOpts>,
 		hooks?: ServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
+
+	/**
+	 * Performs a restore operation on a soft-deleted entity (typically marks as not deleted).
+	 * @param id - The identifier of the entity to restore
+	 * @param hooks - Optional service hooks to execute during restoration
+	 * @returns A promise that resolves to an object indicating success status and optional message
+	 */
+	restore: (
+		id: IdType<T, TOpts>,
+		hooks?: ServiceHooks<T>,
+	) => Promise<{ readonly success: boolean; readonly message?: string }>
 }
 
 /**
  * Interface defining query operations for a service pattern.
  * Provides a comprehensive set of methods for retrieving data from a data source.
- * 
+ *
  * @template T - The base entity type that extends BaseEntity
  * @template TOpts - Service options type, defaults to undefined
  */
@@ -187,7 +227,7 @@ export interface QueryOperations<
 > {
 	/**
 	 * Retrieves all entities from the data source.
-	 * 
+	 *
 	 * @template TRels - Array of relation types to include
 	 * @template TResult - The resulting type based on whether relations are included
 	 * @param opts - Optional query options for filtering, sorting, and including relations
@@ -204,7 +244,7 @@ export interface QueryOperations<
 
 	/**
 	 * Finds a single entity by its unique identifier.
-	 * 
+	 *
 	 * @template TResult - The resulting entity type
 	 * @param id - The unique identifier of the entity
 	 * @returns Promise resolving to the entity or null if not found
@@ -215,7 +255,7 @@ export interface QueryOperations<
 
 	/**
 	 * Finds entities that match the specified criteria using partial matching.
-	 * 
+	 *
 	 * @template TRels - Array of relation types to include
 	 * @template TResult - The resulting type based on whether relations are included
 	 * @param criteria - Partial entity object containing the search criteria
@@ -234,7 +274,7 @@ export interface QueryOperations<
 
 	/**
 	 * Finds entities that exactly match the specified criteria.
-	 * 
+	 *
 	 * @template TRels - Array of relation types to include
 	 * @template TResult - The resulting type based on whether relations are included
 	 * @param criteria - Partial entity object containing the exact match criteria
@@ -253,7 +293,7 @@ export interface QueryOperations<
 
 	/**
 	 * Finds entities by a specific field and its value.
-	 * 
+	 *
 	 * @template K - The key of the entity field to search by
 	 * @template TRels - Array of relation types to include
 	 * @template TResult - The resulting type based on whether relations are included
@@ -276,7 +316,7 @@ export interface QueryOperations<
 
 	/**
 	 * Counts the number of entities that match the specified criteria.
-	 * 
+	 *
 	 * @param criteria - Optional partial entity object containing the search criteria
 	 * @param opts - Optional query options for additional filtering
 	 * @returns Promise resolving to the count of matching entities
@@ -289,7 +329,7 @@ export interface QueryOperations<
 	/**
 	 * Performs cursor-based pagination to retrieve entities.
 	 * Useful for efficient pagination through large datasets.
-	 * 
+	 *
 	 * @template TRels - Array of relation types to include
 	 * @template TResult - The resulting type based on whether relations are included
 	 * @param opts - Query options including cursor information for pagination

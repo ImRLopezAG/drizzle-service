@@ -6,4 +6,26 @@ export const drizzleService = {
 	sqlite,
 }
 
+// Export types for type-safe configurations
+export type {
+	BaseEntity,
+	Handler,
+	IdType,
+	MutationOperations,
+	MutationsBulkOperations,
+	MySqlDb,
+	PaginationResult,
+	PostgresDb,
+	QueryOperations,
+	QueryOpts,
+	RelationType,
+	Service,
+	ServiceHooks,
+	ServiceMethods,
+	ServiceOptions,
+	SoftDeleteTimestampMarker,
+	SQLiteDb,
+	WithRelations,
+} from './builder/types'
+
 export default drizzleService

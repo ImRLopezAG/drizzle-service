@@ -17,6 +17,7 @@ const todosService = service(todos, {
 	soft: {
 		field: 'status',
 		deletedValue: 'canceled',
+		notDeletedValue: 'todo',
 	},
 	getSoftDeleted: async () => {
 		return await todosService.findBy(

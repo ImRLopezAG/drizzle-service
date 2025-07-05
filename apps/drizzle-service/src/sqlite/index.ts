@@ -14,12 +14,12 @@ import type {
 	QueryOperations,
 	QueryOpts,
 	RelationType,
+	SQLiteDb,
+	SQLiteQb,
 	Service,
 	ServiceHooks,
 	ServiceMethods,
 	ServiceOptions,
-	SQLiteDb,
-	SQLiteQb,
 	WithRelations,
 } from '@builder/types'
 import {
@@ -522,6 +522,76 @@ export const createSqliteService = initializeService<SQLiteDb>(
 					message: error
 						? error.message
 						: `Entity with id ${id} successfully hard deleted`,
+				}
+			},
+
+			restore: async (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
+				if (!soft) {
+					return {
+						success: false,
+						message: 'Soft delete is not configured for this entity',
+					}
+				}
+
+				const [error] = await tryHandler(async () => {
+					// Find the entity including soft deleted ones
+					const idField = getIdField()
+					const query = createBaseQuery().where(
+						eq(table[idField] as SQLWrapper, id),
+					)
+					// Skip soft delete filtering to find deleted entities
+					const results = await query
+					const data = results[0] as T['$inferSelect'] | undefined
+
+					if (!data) throw new Error(`Entity with id ${id} not found`)
+
+					if (hooks?.beforeAction) await hooks.beforeAction(data)
+
+					const { field, deletedValue, notDeletedValue } = soft
+
+					// Determine the restore value based on field type
+					let restoreValue: unknown
+					if (typeof deletedValue === 'boolean') {
+						// For boolean fields, use opposite of deletedValue if notDeletedValue not specified
+						restoreValue =
+							notDeletedValue !== undefined ? notDeletedValue : !deletedValue
+					} else if (deletedValue === 'NOT_NULL') {
+						// For timestamp fields with special marker, use null or specified notDeletedValue
+						restoreValue =
+							notDeletedValue !== undefined ? notDeletedValue : null
+					} else {
+						// For other types, notDeletedValue is required
+						if (notDeletedValue === undefined) {
+							throw new Error(
+								'notDeletedValue is required for non-boolean, non-timestamp soft delete fields',
+							)
+						}
+						restoreValue = notDeletedValue
+					}
+
+					// Update the entity to restore it
+					await db
+						.update(table)
+						.set({
+							[field]: restoreValue,
+							updatedAt: new Date(),
+						} as Record<string, unknown>)
+						.where(eq(table[idField] as SQLWrapper, id))
+
+					const restoredData = {
+						...data,
+						[field]: restoreValue,
+					} as T['$inferSelect']
+					if (hooks?.afterAction) await hooks.afterAction(restoredData)
+
+					return true
+				})
+
+				return {
+					success: !error,
+					message: error
+						? error.message
+						: `Entity with id ${id} successfully restored`,
 				}
 			},
 		}

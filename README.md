@@ -1,10 +1,12 @@
-# Drizzle Service
+# 🛡️ Drizzle Service
 
-A powerful, type-safe repository pattern library for [Drizzle ORM](https://orm.drizzle.team/) that provides advanced CRUD operations, pagination, soft deletes, relations, and bulk operations for **PostgreSQL** and **SQLite**.
+A powerful, type-safe service layer library for [Drizzle ORM](https://orm.drizzle.team/) that provides advanced CRUD operations, pagination, soft deletes, relations, and bulk operations for **PostgreSQL** and **SQLite**.
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-C5F74F?style=flat&logo=drizzle&logoColor=black)](https://orm.drizzle.team/)
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
+[![npm version](https://img.shields.io/npm/v/drizzle-service.svg)](https://www.npmjs.com/package/drizzle-service)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/ImRLopezAG/drizzle-service/ci.yml?branch=main)](https://github.com/ImRLopezAG/drizzle-service/actions)
+
 
 ## ✨ Features
 
@@ -16,17 +18,20 @@ A powerful, type-safe repository pattern library for [Drizzle ORM](https://orm.d
 - ⚡ **Bulk Operations**: Efficient bulk create, update, and delete operations
 - 🪝 **Lifecycle Hooks**: Before/after action hooks for all mutation operations
 - 🏢 **Multi-Tenant**: Workspace-based filtering for multi-tenant applications
-- 🔧 **Extensible**: Override and extend default repository methods
+- 🔧 **Extensible**: Override and extend default service methods
 - 🎯 **Error Handling**: Consistent error handling with success/error patterns
 - 🚀 **Performance**: Optimized queries with caching support
 
 ## 📦 Installation
 
 ```bash
+# npm
 npm install drizzle-service
-# or
+
+# pnpm
 pnpm add drizzle-service
-# or
+
+# bun
 bun add drizzle-service
 ```
 
@@ -45,63 +50,72 @@ import { pgTable, serial, text, timestamp, pgEnum } from 'drizzle-orm/pg-core'
 
 export const statusEnum = pgEnum('status', ['active', 'inactive', 'deleted'])
 
-export const users = pgTable('users', {
-  id: serial('id').primaryKey(),
-  email: text('email').notNull().unique(),
-  name: text('name').notNull(),
+export const users = pgTable('users', (t) => ({
+  id: t.serial('id').primaryKey(),
+  email: t.text('email').notNull().unique(),
+  name: t.text('name').notNull(),
   status: statusEnum('status').default('active').notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
-
-export const posts = pgTable('posts', {
-  id: serial('id').primaryKey(),
-  title: text('title').notNull(),
-  content: text('content'),
-  userId: integer('user_id').references(() => users.id),
-  isDeleted: boolean('is_deleted').default(false),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
+  createdAt: t.timestamp('created_at').notNull().$defaultFn(() => new Date()),
+  updatedAt: t.timestamp('updated_at').notNull().$defaultFn(() => new Date()),
+}))
 ```
 
 ### 2. Setup Database Connection
 
+#### PostgreSQL
 ```typescript
 // db.ts
 import { drizzle } from 'drizzle-orm/postgres-js'
-import { drizzleRepository } from 'drizzle-service/pg'
+import { drizzleService } from 'drizzle-service/pg'
 import postgres from 'postgres'
 import * as schema from './schema'
 
 const client = postgres(process.env.DATABASE_URL!)
-const db = drizzle(client, { schema })
+const db = drizzle({ client, schema })
 
-// Create repository instance
-const repository = drizzleRepository(db)
-// Create repositories
-export const userRepository = repository(schema.users, {
+// Create service factory
+const service = drizzleService(db)
+
+// Create user service with configuration
+export const userService = service(schema.users, {
   defaultLimit: 50,
   maxLimit: 500,
-  soft: { field: 'status', deletedValue: 'deleted' }
-})
-
-export const postRepository = repository(schema.posts, {
-  soft: { field: 'isDeleted', deletedValue: true }
+  soft: { 
+    field: 'status', 
+    deletedValue: 'deleted',
+    notDeletedValue: 'active' 
+  }
 })
 ```
 
-### 3. Use the Repository
-
+#### SQLite
 ```typescript
+// db.ts
+import { drizzle } from 'drizzle-orm/better-sqlite3'
+import { drizzleService } from 'drizzle-service/sqlite'
+import Database from 'better-sqlite3'
+import * as schema from './schema'
+
+const sqlite = new Database('sqlite.db')
+const db = drizzle({ client: sqlite, schema })
+
+// Create service factory
+const service = drizzleService(db)
+
+// Create user service
+export const userService = service(schema.users, {
+  defaultLimit: 50,
+  maxLimit: 500,
+})
+
+### 3. Use the Service
+
 // main.ts
-import { eq } from 'drizzle-orm'
-import { userRepository, postRepository } from './db'
-import { users, posts } from './schema'
+import { userService } from './db'
 
 async function main() {
   // Create a user
-  const [error, user] = await userRepository.create({
+  const [error, user] = await userService.create({
     email: 'john@example.com',
     name: 'John Doe'
   })
@@ -109,500 +123,298 @@ async function main() {
   if (error) throw error
   console.log('Created user:', user)
 
-  // Find users with pagination and relations
-  const usersWithPosts = await userRepository.findAll({
-    relations: [{
-      table: posts,
-      type: 'left',
-      sql: eq(users.id, posts.userId)
-    }],
+  // Find users with pagination
+  const users = await userService.findAll({
     page: 1,
     limit: 10,
     orderBy: { createdAt: 'desc' }
   })
 
-  // Bulk operations
-  const [bulkError, newUsers] = await userRepository.bulkCreate([
-    { email: 'alice@example.com', name: 'Alice Smith' },
-    { email: 'bob@example.com', name: 'Bob Johnson' }
-  ])
-
-  // Query with complex criteria
-  const activeUsers = await userRepository.findBy({
+  // Find by criteria
+  const activeUsers = await userService.findBy({
     status: 'active'
   }, {
     orderBy: { name: 'asc' },
     limit: 20
   })
+
+  // Bulk operations
+  const [bulkError, newUsers] = await userService.bulkCreate([
+    { email: 'alice@example.com', name: 'Alice Smith' },
+    { email: 'bob@example.com', name: 'Bob Johnson' }
+  ])
+
+  if (bulkError) throw bulkError
+  console.log('Created users:', newUsers)
 }
 ```
 
-## 📚 Complete API Reference
+## 📚 API Reference
 
-### Repository Creation
+### Query Operations
 
-#### PostgreSQL
-```typescript
-import { drizzleRepository } from 'drizzle-service/pg'
-
-const repository = drizzleRepository(db, table, options?)
-```
-
-#### SQLite
-```typescript
-import { drizzleRepository } from 'drizzle-service/sqlite'
-
-const repository = drizzleRepository(db, table, options?)
-```
-
-### Repository Options
+#### `findAll(options?)`
+Retrieves all records with optional filtering, pagination, and relations.
 
 ```typescript
-interface RepositoryOptions<T> {
-  id?: keyof T['$inferSelect']           // Custom ID field (default: 'id')
-  defaultLimit?: number                  // Default pagination limit (default: 100)
-  maxLimit?: number                     // Maximum pagination limit (default: 1000)
-  soft?: {                              // Soft delete configuration
-    field: keyof T['$inferSelect']
-    deletedValue: any
-  }
-  caching?: {                           // Caching configuration
-    get?: <K, V>(key: K) => V | null
-    set?: <K, V>(key: K, value: V, ttl?: number) => void
-    clear?: () => void
-    delete?: <K>(key: K) => void
-  }
-  override?: (baseMethods) => Partial<RepositoryMethods<T>>  // Method overrides
-}
-```
-
-## 🔍 Query Operations
-
-### Basic Queries
-
-#### Find All Records
-```typescript
-const users = await userRepository.findAll()
-
-// With options
-const paginatedUsers = await userRepository.findAll({
-  page: 2,
-  limit: 25,
-  orderBy: { createdAt: 'desc', name: 'asc' },
-  withDeleted: false
-})
-```
-
-#### Find by ID
-```typescript
-const user = await userRepository.findById(123)
-// Returns: User | null
-```
-
-#### Find by Criteria (AND condition)
-```typescript
-const users = await userRepository.findBy({
-  status: 'active',
-  name: 'John'
-})
-```
-
-#### Find by Matching (OR condition)
-```typescript
-const users = await userRepository.findByMatching({
-  status: 'active',
-  name: 'John'
-})
-// Finds users where status='active' OR name='John'
-```
-
-#### Find by Field
-```typescript
-const users = await userRepository.findByField('email', 'john@example.com')
-```
-
-### Advanced Queries
-
-#### Relations and Joins
-```typescript
-const usersWithPosts = await userRepository.findAll({
-  relations: [{
-    table: posts,
-    type: 'left',
-    sql: eq(users.id, posts.userId)
-  }],
-  parse: (data) => data.map(row => ({
-    ...row.users,
-    posts: row.posts ? [row.posts] : []
-  }))
-})
-```
-
-#### Cursor-based Pagination
-```typescript
-const result = await userRepository.findWithCursor({
+const users = await userService.findAll({
+  page: 1,
   limit: 20,
-  cursor: new Date('2024-01-01'),
+  orderBy: { createdAt: 'desc' },
+  where: { status: 'active' }
+})
+```
+
+#### `findById(id, options?)`
+Finds a single record by primary key.
+
+```typescript
+const user = await userService.findById(1)
+```
+
+#### `findBy(criteria, options?)`
+Finds records matching specific criteria.
+
+```typescript
+const activeUsers = await userService.findBy(
+  { status: 'active' },
+  { limit: 10, orderBy: { name: 'asc' } }
+)
+```
+
+#### `findByField(field, value, options?)`
+Finds records by a specific field and its value.
+
+```typescript
+const usersByStatus = await userService.findByField('status', 'active', {
+  limit: 10,
+  orderBy: { name: 'asc' }
+})
+```
+
+#### `findByMatching(criteria, options?)`
+Finds records that exactly match the specified criteria.
+
+```typescript
+const exactMatches = await userService.findByMatching(
+  { status: 'active', name: 'John Doe' },
+  { limit: 5 }
+)
+```
+
+#### `findWithCursor(options)`
+Performs cursor-based pagination for efficient large dataset navigation.
+
+```typescript
+const paginatedResult = await userService.findWithCursor({
+  limit: 20,
+  cursor: new Date('2023-01-01'),
   orderBy: { createdAt: 'desc' }
 })
 
-console.log(result.items)
-console.log(result.nextCursor)
-console.log(result.pagination)
+console.log(paginatedResult.items)
+console.log(paginatedResult.nextCursor)
+console.log(paginatedResult.pagination)
 ```
 
-#### Custom SQL Conditions
-```typescript
-import { and, or, gt, like } from 'drizzle-orm'
+#### `count(where?)`
+Counts records matching optional criteria.
 
-const users = await userRepository.findAll({
-  custom: and(
-    gt(users.createdAt, new Date('2024-01-01')),
-    or(
-      like(users.name, '%John%'),
-      like(users.email, '%@company.com')
-    )
-  )
-})
+```typescript
+const activeUserCount = await userService.count({ status: 'active' })
 ```
 
-#### Multi-tenant Workspace Filtering
+### Mutation Operations
+
+#### `create(data, hooks?)`
+Creates a new entity with optional lifecycle hooks.
+
 ```typescript
-const tenantUsers = await userRepository.findAll({
-  workspace: {
-    field: 'tenantId',
-    value: 'tenant-123'
-  }
-})
-```
-
-#### Count Records
-```typescript
-const totalUsers = await userRepository.count()
-const activeUsers = await userRepository.count({ status: 'active' })
-```
-
-## ✏️ Mutation Operations
-
-### Create Operations
-
-#### Single Create
-```typescript
-const [error, user] = await userRepository.create({
-  email: 'new@example.com',
+const [error, user] = await userService.create({
+  email: 'user@example.com',
   name: 'New User'
+}, {
+  beforeAction: async (data) => {
+    console.log('Before creating:', data)
+  },
+  afterAction: async (result) => {
+    console.log('User created:', result.id)
+  }
 })
 
 if (error) {
-  console.error('Create failed:', error.message)
+  console.error('Creation failed:', error)
 } else {
-  console.log('Created:', user)
+  console.log('Created user:', user)
 }
 ```
 
-#### Create with Hooks
-```typescript
-const [error, user] = await userRepository.create(
-  { email: 'test@example.com', name: 'Test User' },
-  {
-    beforeAction: async (data) => {
-      console.log('About to create:', data)
-      // Validation, logging, etc.
-    },
-    afterAction: async (user) => {
-      console.log('Created user with ID:', user.id)
-      // Send welcome email, create related records, etc.
-    },
-    onError: async (error) => {
-      console.error('Creation failed:', error)
-      // Error reporting, cleanup, etc.
-    }
-  }
-)
-```
+#### `update(id, data, hooks?)`
+Updates an existing entity.
 
-### Update Operations
-
-#### Update by ID
 ```typescript
-const [error, updatedUser] = await userRepository.update(123, {
-  name: 'Updated Name',
-  status: 'inactive'
+const [error, user] = await userService.update(1, {
+  name: 'Updated Name'
 })
+
+if (error) {
+  console.error('Update failed:', error)
+} else {
+  console.log('Updated user:', user)
+}
 ```
 
-#### Update with Validation
+#### `delete(id, hooks?)`
+Deletes an entity (soft delete if configured).
+
 ```typescript
-const [error, user] = await userRepository.update(
-  123,
-  { email: 'new-email@example.com' },
-  undefined, // hooks
-  (data) => {
-    if (!data.email?.includes('@')) {
-      throw new Error('Invalid email format')
-    }
-  }
-)
+const result = await userService.delete(1)
+console.log('Delete result:', result.success, result.message)
 ```
 
-### Delete Operations
+#### `hardDelete(id, hooks?)`
+Permanently removes an entity from the database.
 
-#### Soft Delete
 ```typescript
-const result = await userRepository.delete(123)
-console.log(result.success) // true
-console.log(result.message) // "Record soft deleted successfully"
+const result = await userService.hardDelete(1)
+console.log('Hard delete result:', result.success, result.message)
 ```
 
-#### Hard Delete
+#### `restore(id, hooks?)`
+Restores a soft-deleted entity.
+
 ```typescript
-const result = await userRepository.hardDelete(123)
-console.log(result.success) // true
+const result = await userService.restore(1)
+console.log('Restore result:', result.success, result.message)
 ```
 
-## ⚡ Bulk Operations
+### Bulk Operations
 
-### Bulk Create
+#### `bulkCreate(data[], hooks?)`
+Creates multiple entities in a single transaction.
+
 ```typescript
-const [error, users] = await userRepository.bulkCreate([
+const [error, users] = await userService.bulkCreate([
   { email: 'user1@example.com', name: 'User 1' },
-  { email: 'user2@example.com', name: 'User 2' },
-  { email: 'user3@example.com', name: 'User 3' }
+  { email: 'user2@example.com', name: 'User 2' }
 ])
 
 if (error) {
   console.error('Bulk create failed:', error)
 } else {
-  console.log(`Created ${users.length} users`)
+  console.log('Created users:', users)
 }
 ```
 
-### Bulk Update
+#### `bulkUpdate(updates[], hooks?)`
+Updates multiple records with different data for each.
+
 ```typescript
-const [error, users] = await userRepository.bulkUpdate([
-  { id: 1, data: { name: 'Updated User 1' } },
-  { id: 2, data: { name: 'Updated User 2' } },
-  { id: 3, data: { status: 'inactive' } }
+const [error, updatedUsers] = await userService.bulkUpdate([
+  { id: 1, changes: { name: 'Updated Name 1' } },
+  { id: 2, changes: { name: 'Updated Name 2' } }
 ])
 ```
 
-### Bulk Delete
-```typescript
-// Soft delete multiple records
-const result = await userRepository.bulkDelete([1, 2, 3])
+#### `bulkDelete(ids[], hooks?)`
+Deletes multiple records by their IDs.
 
-// Hard delete multiple records
-const result = await userRepository.bulkHardDelete([1, 2, 3])
+```typescript
+const result = await userService.bulkDelete([1, 2, 3])
+console.log('Bulk delete result:', result.success, result.message)
 ```
 
-## 🗄️ Database-Specific Features
+#### `bulkHardDelete(ids[], hooks?)`
+Permanently removes multiple records from the database.
 
-### PostgreSQL Features
 ```typescript
-import { drizzleRepository } from 'drizzle-service/pg'
-
-// PostgreSQL-specific optimizations
-const pgRepository = drizzleRepository(pgDb, pgTable, {
-  // PostgreSQL supports advanced indexing strategies
-  defaultLimit: 100,
-  // Optimized for PostgreSQL connection pooling
-})
+const result = await userService.bulkHardDelete([1, 2, 3])
+console.log('Bulk hard delete result:', result.success, result.message)
 ```
 
-### SQLite Features
-```typescript
-import { drizzleRepository } from 'drizzle-service/sqlite'
+## ⚙️ Configuration
 
-// SQLite-specific optimizations  
-const sqliteRepository = drizzleRepository(sqliteDb, sqliteTable, {
-  // SQLite optimized defaults
-  defaultLimit: 50,
-  // Optimized for SQLite file operations
-})
-```
-
-## 🏗️ Advanced Usage
-
-### Custom Repository Extensions
+### Service Options
 
 ```typescript
-const userRepository = drizzleRepository(db, users, {
-  override: (baseMethods) => ({
-    // Add custom methods
-    findByEmail: async (email: string) => {
-      return baseMethods.findByField('email', email)
-    },
-    
-    findActiveUsers: async () => {
-      return baseMethods.findBy({ status: 'active' })
-    },
-    
-    // Override existing methods
-    findAll: async (options?) => {
-      // Add default filtering for deleted users
-      const enhancedOptions = {
-        ...options,
-        withDeleted: false
-      }
-      return baseMethods.findAll(enhancedOptions)
-    }
-  })
-})
-
-// Usage
-const user = await userRepository.findByEmail('john@example.com')
-const activeUsers = await userRepository.findActiveUsers()
-```
-
-### Caching Integration
-
-```typescript
-const cache = new Map()
-
-const userRepository = drizzleRepository(db, users, {
-  caching: {
-    get: (key) => cache.get(key),
-    set: (key, value, ttl) => {
-      cache.set(key, value)
-      if (ttl) {
-        setTimeout(() => cache.delete(key), ttl * 1000)
-      }
-    },
-    delete: (key) => cache.delete(key),
-    clear: () => cache.clear()
+interface ServiceOptions<T extends BaseEntity> {
+  defaultLimit?: number      // Default pagination limit (default: 100)
+  maxLimit?: number         // Maximum allowed limit (default: 1000)
+  id?: keyof T['$inferSelect'] // Custom ID field (default: 'id')
+  soft?: {                  // Soft delete configuration
+    field: keyof T['$inferSelect']     // Field to mark as deleted
+    deletedValue: T['$inferSelect'][keyof T['$inferSelect']]      // Value indicating deleted state
+    notDeletedValue?: T['$inferSelect'][keyof T['$inferSelect']]  // Value indicating active state
   }
-})
-```
-
-### Complex Relations Example
-
-```typescript
-// Multi-level relations
-const usersWithPostsAndComments = await userRepository.findAll({
-  relations: [
-    {
-      table: posts,
-      type: 'left',
-      sql: eq(users.id, posts.userId)
-    },
-    {
-      table: comments,
-      type: 'left', 
-      sql: eq(posts.id, comments.postId)
-    }
-  ],
-  parse: (data) => {
-    // Group and structure the joined data
-    const userMap = new Map()
-    
-    data.forEach(row => {
-      const userId = row.users.id
-      if (!userMap.has(userId)) {
-        userMap.set(userId, {
-          ...row.users,
-          posts: []
-        })
-      }
-      
-      const user = userMap.get(userId)
-      if (row.posts) {
-        const existingPost = user.posts.find(p => p.id === row.posts.id)
-        if (!existingPost) {
-          user.posts.push({
-            ...row.posts,
-            comments: row.comments ? [row.comments] : []
-          })
-        } else if (row.comments) {
-          existingPost.comments.push(row.comments)
-        }
-      }
-    })
-    
-    return Array.from(userMap.values())
+  caching?: {               // Optional caching configuration
+    get?: <K, V>(key: K) => V | null
+    set?: <K, V>(key: K, value: V, ttl?: number) => void
+    clear?: () => void
+    delete?: <K>(key: K) => void
   }
-})
-```
-
-## 📝 Types and Interfaces
-
-### Core Types
-
-```typescript
-// Handler for error handling
-type Handler<T> = Promise<[Error, null] | [null, T]>
-
-// Pagination result
-interface PaginationResult<T> {
-  readonly items: readonly T[]
-  readonly nextCursor: Date | null
-  readonly pagination: {
-    readonly page: number
-    readonly pageSize: number 
-    readonly total: number
-    readonly hasNext: boolean
-    readonly hasPrev: boolean
-  }
+  override?: (baseMethods: ServiceMethods<T>) => Partial<ServiceMethods<T>>
 }
+```
 
-// Repository hooks
-interface RepositoryHooks<T> {
+### Lifecycle Hooks
+
+```typescript
+interface ServiceHooks<T extends BaseEntity> {
   beforeAction?: (data: T['$inferSelect']) => Promise<void>
   afterAction?: (data: T['$inferSelect']) => Promise<void>
   onError?: (error: Error) => Promise<void>
 }
-
-// Relation definition
-interface WithRelations {
-  type: 'left' | 'inner' | 'right'
-  table: BaseEntity
-  sql: SQL
-}
 ```
 
-### Query Options
+## 🎯 Why Drizzle Service?
 
+While Drizzle ORM is powerful and flexible, it can require significant boilerplate for common operations. Drizzle Service eliminates this repetition while maintaining type safety.
+
+### Before (Plain Drizzle)
 ```typescript
-interface QueryOpts<T, TResult = T['$inferSelect'][], TRels extends WithRelations[] = []> {
-  page?: number
-  limit?: number
-  orderBy?: {
-    [P in keyof T['$inferSelect']]?: 'asc' | 'desc'
-  }
-  withDeleted?: boolean
-  cursor?: Date | null
-  relations?: TRels
-  workspace?: {
-    field: keyof T['$inferSelect']
-    value: T['$inferSelect'][keyof T['$inferSelect']]
-  }
-  custom?: SQL
-  parse?: (data: any[]) => TResult
+// Manual pagination and error handling
+const page = 1
+const limit = 20
+const offset = (page - 1) * limit
+try {
+  const users = await db
+    .select()
+    .from(userTable)
+    .where(ne(userTable.status, 'deleted'))
+    .limit(limit)
+    .offset(offset)
+    .orderBy(desc(userTable.createdAt))
+    
+  const total = await db
+    .select({ count: count() })
+    .from(userTable)
+    .where(ne(userTable.status, 'deleted'))
+    
+  // Manual result formatting and error handling...
+} catch (error) {
+  // Manual error handling...
 }
 ```
 
-## 🧪 Testing Examples
-
-The library includes comprehensive test suites demonstrating real-world usage patterns. Check the `packages/test` directory for complete examples:
-
-- **PostgreSQL Tests**: `packages/test/test/postgres/`
-- **SQLite Tests**: `packages/test/test/sqlite/`
-- **Type Tests**: `packages/test/test/*/types.test.ts`
-
-### Running Tests
-```bash
-# Run all tests
-pnpm test
-
-# Run PostgreSQL tests
-pnpm db:push:pg && pnpm test packages/test/test/postgres
-
-# Run SQLite tests  
-pnpm test packages/test/test/sqlite
+### After (Drizzle Service)
+```typescript
+// Clean, declarative API with built-in pagination and error handling
+const users = await userService.findAll({
+  page: 1,
+  limit: 20,
+  orderBy: { createdAt: 'desc' }
+})
+// Soft-deleted records are automatically excluded
+// Error handling is built into the service layer
 ```
+
+## 📖 Documentation
+
+For complete documentation, examples, and advanced usage, visit: [Drizzle Service Documentation](https://github.com/ImRLopezAG/drizzle-service)
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
 ## 📄 License
 
@@ -610,9 +422,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- [Drizzle ORM](https://orm.drizzle.team/) - The amazing ORM that powers this library
-- All contributors who have helped shape this project
+- Built on top of the excellent [Drizzle ORM](https://orm.drizzle.team/)
+- Inspired by [Saas-Js](https://github.com/saas-js/saas-js) and the need for a consistent, type-safe service layer
+- Thanks to all contributors and the TypeScript community
+
+## 📞 Support
+
+- 📧 Email: contact@imrlopez.dev
+- 🐛 Issues: [GitHub Issues](https://github.com/ImRLopezAG/drizzle-service/issues)
+- 💬 Discussions: [GitHub Discussions](https://github.com/ImRLopezAG/drizzle-service/discussions)
 
 ---
 
-*Built with ❤️ for the TypeScript and Drizzle ORM community*
+Made with ❤️ by [Angel Lopez](https://github.com/ImRLopezAG)

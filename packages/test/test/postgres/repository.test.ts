@@ -1,7 +1,7 @@
 import { and, eq, gt, like, lt, or, sql } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { service, tenants, todos, users } from './schema'
-
+import { z } from 'zod/v4'
 // Generate unique test data to avoid duplicate key constraints
 const timestamp = Date.now()
 const uniquePrefix = `Test-${timestamp}`
@@ -19,6 +19,7 @@ const todosService = service(todos, {
 	soft: {
 		field: 'status',
 		deletedValue: 'canceled',
+		notDeletedValue: 'todo',
 	},
 	getSoftDeleted: async () => {
 		return await todosService.findBy(
@@ -81,6 +82,12 @@ const createTodo = async (
 	}
 	throw new Error('Failed to create todo')
 }
+
+const userSchema = z.object({
+	email: z.email(),
+	name: z.string().min(1, 'Name is required'),
+	tenant: z.number().min(1, 'Tenant ID is required'),
+})
 
 // Setup test data
 beforeAll(async () => {
@@ -288,6 +295,22 @@ describe('PG Service: Mutation Operations', () => {
 		expect(error).toBeNull()
 		expect(updated).toBeDefined()
 		expect(hookCalled).toBe(true)
+	})
+
+	it('should throw an zod validation error for invalid data', async () => {
+		const invalidData = {
+			email: 'invalid-email',
+			name: '',
+			tenant: 0,
+		}
+
+		const [error, user] = await userService.create(invalidData, {
+			async beforeAction(data) {
+					userSchema.parse(data)
+			},
+		})
+		expect(error).toBeDefined()
+		expect(user).toBeNull()
 	})
 })
 
