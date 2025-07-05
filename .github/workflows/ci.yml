@@ -17,7 +17,7 @@ on:
 
 jobs:
   test:
-    name: Testing SQLite
+    name: Testing SQLite And Postgres
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

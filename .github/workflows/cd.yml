@@ -11,7 +11,7 @@ jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.modified, 'apps/drizzle-service/package.json')
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       # Remove the version check steps since we're already filtering
       - uses: actions/checkout@v4
@@ -27,12 +27,15 @@ jobs:
       - name: Check for changes in package.json
         id: check_changes
         run: |
+          # Get the commit SHA from the triggering workflow
+          COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+          
           # Check if HEAD^ exists, if not this might be the first commit
-          if ! git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+          if ! git rev-parse --verify ${COMMIT_SHA}^ >/dev/null 2>&1; then
             echo "No previous commit found (possibly first commit), proceeding with publish."
             echo "publish=true" >> $GITHUB_OUTPUT
           else
-            VERSION_CHANGED=$(git diff HEAD^ HEAD -- 'apps/drizzle-service/package.json' | grep '"version":' || true)
+            VERSION_CHANGED=$(git diff ${COMMIT_SHA}^ ${COMMIT_SHA} -- 'apps/drizzle-service/package.json' | grep '"version":' || true)
             if [ -z "$VERSION_CHANGED" ]; then
               echo "No version change detected, skipping publish."
               echo "publish=false" >> $GITHUB_OUTPUT
