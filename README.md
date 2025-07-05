@@ -5,8 +5,8 @@ A powerful, type-safe service layer library for [Drizzle ORM](https://orm.drizzl
 [![npm version](https://img.shields.io/npm/v/drizzle-service.svg)](https://www.npmjs.com/package/drizzle-service)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/ImRLopezAG/drizzle-service/ci.yml?branch=main)](https://github.com/ImRLopezAG/drizzle-service/actions)
-[![Release Status](https://img.shields.io/github/actions/workflow/status/ImRLopezAG/drizzle-service/cd.yml?branch=main)](https://github.com/ImRLopezAG/drizzle-service/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/ImRLopezAG/drizzle-service/ci.yml?branch=main&label=build%20test)](https://github.com/ImRLopezAG/drizzle-service/actions)
+[![Release Status](https://img.shields.io/github/actions/workflow/status/ImRLopezAG/drizzle-service/cd.yml?branch=main&label=release)](https://github.com/ImRLopezAG/drizzle-service/actions)
 
 ## ✨ Features
 
