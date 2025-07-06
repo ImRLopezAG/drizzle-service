@@ -13,8 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
-      # Remove the version check steps since we're already filtering
       - uses: actions/checkout@v4
+        with:
+          # Fetch enough history to compare with previous commit
+          fetch-depth: 2
+          ref: ${{ github.event.workflow_run.head_sha }}
       
       - uses: pnpm/action-setup@v4
           
@@ -24,24 +27,37 @@ jobs:
           registry-url: 'https://registry.npmjs.org/'
           cache: 'pnpm'
           
-      - name: Check for changes in package.json
+      - name: Check for version changes in package.json
         id: check_changes
         run: |
           # Get the commit SHA from the triggering workflow
           COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "Checking for version changes in commit: $COMMIT_SHA"
           
-          # Check if HEAD^ exists, if not this might be the first commit
-          if ! git rev-parse --verify ${COMMIT_SHA}^ >/dev/null 2>&1; then
-            echo "No previous commit found (possibly first commit), proceeding with publish."
-            echo "publish=true" >> $GITHUB_OUTPUT
+          # Check if we have a previous commit to compare against
+          if ! git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+            echo "No previous commit found (possibly first commit), skipping publish."
+            echo "publish=false" >> $GITHUB_OUTPUT
           else
-            VERSION_CHANGED=$(git diff ${COMMIT_SHA}^ ${COMMIT_SHA} -- 'apps/drizzle-service/package.json' | grep '"version":' || true)
-            if [ -z "$VERSION_CHANGED" ]; then
-              echo "No version change detected, skipping publish."
-              echo "publish=false" >> $GITHUB_OUTPUT
-            else
-              echo "Version change detected, proceeding with publish."
+            # Check if package.json file exists and has changes
+            if ! git show HEAD~1:apps/drizzle-service/package.json >/dev/null 2>&1; then
+              echo "package.json didn't exist in previous commit, proceeding with publish."
               echo "publish=true" >> $GITHUB_OUTPUT
+            else
+              # Extract current and previous versions
+              CURRENT_VERSION=$(cat apps/drizzle-service/package.json | grep '"version":' | cut -d'"' -f4)
+              PREVIOUS_VERSION=$(git show HEAD~1:apps/drizzle-service/package.json | grep '"version":' | cut -d'"' -f4)
+              
+              echo "Current version: $CURRENT_VERSION"
+              echo "Previous version: $PREVIOUS_VERSION"
+              
+              if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
+                echo "Version changed from $PREVIOUS_VERSION to $CURRENT_VERSION, proceeding with publish."
+                echo "publish=true" >> $GITHUB_OUTPUT
+              else
+                echo "No version change detected ($CURRENT_VERSION), skipping publish."
+                echo "publish=false" >> $GITHUB_OUTPUT
+              fi
             fi
           fi
           
