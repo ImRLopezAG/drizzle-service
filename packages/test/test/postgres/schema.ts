@@ -97,4 +97,3 @@ const db = drizzle({
 const service = drizzleService(db)
 
 export { db, service, tenants, todos, users }
-

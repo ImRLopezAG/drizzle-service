@@ -415,9 +415,11 @@ const users = await userService.findAll({
 // Error handling is built into the service layer
 ```
 
+
 ## 📖 Documentation
 
-For complete documentation, examples, and advanced usage, visit: [Drizzle Service Documentation](https://github.com/ImRLopezAG/drizzle-service)
+For complete documentation, examples, and advanced usage, visit: [Drizzle Service Documentation](https://drizzle-service-docs.vercel.app/)
+
 
 ## 🤝 Contributing
 

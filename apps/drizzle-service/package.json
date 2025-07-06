@@ -2,8 +2,8 @@
   "name": "drizzle-service",
   "module": "lib/index.js",
   "type": "module",
-  "version": "0.0.3",
-  "description": "A service for managing Drizzle ORM entities with Bun and TypeScript.",
+  "version": "0.0.4",
+  "description": "A service for managing Drizzle ORM entities with advanced CRUD operations, pagination, soft deletes, relations, and bulk operations full type-safe",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "author": {
@@ -15,6 +15,7 @@
     "type": "git",
     "url": "https://github.com/ImRLopezAG/drizzle-service.git"
   },
+  "homepage": "https://drizzle-service-docs.vercel.app/",
   "exports": {
     ".": {
       "import": "./lib/index.js",

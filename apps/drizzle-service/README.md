@@ -9,7 +9,7 @@
 
 A powerful, type-safe service layer library for [Drizzle ORM](https://orm.drizzle.team/) that provides advanced CRUD operations, pagination, soft deletes, relations, and bulk operations for **PostgreSQL** and **SQLite**.
 
-[![npm version](https://img.shields.io/npm/v/drizzle-service.svg)](https://www.npmjs.com/package/drizzle-service)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 
@@ -415,7 +415,7 @@ const users = await userService.findAll({
 
 ## 📖 Documentation
 
-For complete documentation, examples, and advanced usage, visit: [Drizzle Service Documentation](https://github.com/ImRLopezAG/drizzle-service)
+For complete documentation, examples, and advanced usage, visit: [Drizzle Service Documentation](https://drizzle-service-docs.vercel.app/)
 
 ## 🤝 Contributing
 
