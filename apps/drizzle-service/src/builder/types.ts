@@ -36,8 +36,7 @@ type SoftDeleteConfig<
 	K extends keyof T['$inferSelect'],
 > = {
 	readonly field: K
-} & // For boolean fields: deletedValue is required, notDeletedValue is optional (defaults to opposite)
-(T['$inferSelect'][K] extends boolean
+} & (T['$inferSelect'][K] extends boolean // For boolean fields: deletedValue is required, notDeletedValue is optional (defaults to opposite)
 	? {
 			readonly deletedValue: boolean
 			readonly notDeletedValue?: boolean
@@ -347,6 +346,35 @@ export interface QueryOperations<
 			TResult extends T['$inferSelect'][] ? T['$inferSelect'] : TResult
 		>
 	>
+
+	/**
+	 * Performs advanced filtering using Business Central style filter expressions.
+	 * Supports operators like ranges (..), wildcards (*), comparisons (<, >, <=, >=, <>),
+	 * logical operators (&, |), and case-insensitive matching (@).
+	 *
+	 * Filter expression format: [filterExpression, ...values]
+	 * Examples:
+	 * - Range: ['%1..%2', 1000, 5000] // Between 1000 and 5000
+	 * - Wildcard: ['*%1*', 'search'] // Contains 'search'
+	 * - Multiple values: ['%1|%2|%3', 'A', 'B', 'C'] // Equals A, B, or C
+	 * - Comparison: ['>%1', 100] // Greater than 100
+	 * - Case insensitive: ['@*%1*', 'Search'] // Contains 'Search' (case insensitive)
+	 *
+	 * @template TRels - Array of relation types to include
+	 * @template TResult - The resulting type based on whether relations are included
+	 * @param criteria - Object mapping field names to filter expressions
+	 * @param opts - Optional query options for additional filtering, sorting, and including relations
+	 * @returns Promise resolving to an array of entities matching the filter criteria
+	 */
+	filter: <
+		TRels extends WithRelations[] = [],
+		TResult = TRels['length'] extends 0
+			? T['$inferSelect'][]
+			: RelationType<T, TRels>[],
+	>(
+		criteria: FilterCriteria<T>,
+		opts?: QueryOpts<T, TResult, TRels>,
+	) => Promise<TResult>
 }
 
 export interface MutationsBulkOperations<
@@ -437,3 +465,10 @@ export type IdType<
 	: T['$inferSelect'] extends { id: infer IdType }
 		? IdType // Use the entity's native ID field type
 		: string // Default to string if no ID field exists
+
+// Filter configuration for Business Central style filtering
+export type FilterExpression<T> = [string, ...T[]]
+
+export type FilterCriteria<T extends BaseEntity> = {
+	[K in keyof T['$inferSelect']]?: FilterExpression<T['$inferSelect'][K]>
+}

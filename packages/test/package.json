@@ -6,7 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "test:full": "vitest run",
-    "test:bun": "bun test --coverage repository",
+    "test:bun": "bun test repository --coverage",
     "test:watch": "vitest --reporter=verbose --watch",
     "lint": "biome check .",
     "lint:unsafe": "biome check --write --unsafe .",

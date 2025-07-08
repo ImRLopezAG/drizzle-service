@@ -1,4 +1,5 @@
 import {
+	createParserFunction,
 	errorHandler,
 	getTableName,
 	initializeService,
@@ -6,6 +7,7 @@ import {
 } from '@/builder'
 import type {
 	BaseEntity,
+	FilterCriteria,
 	Handler,
 	IdType,
 	MutationOperations,
@@ -30,6 +32,7 @@ import {
 	desc,
 	eq,
 	gt,
+	ilike,
 	inArray,
 	ne,
 	or,
@@ -131,6 +134,12 @@ export const createPostgresService = initializeService<PostgresDb>(
 			return q.where(custom)
 		}
 
+		const parseFilterExpression = createParserFunction<
+			T,
+			keyof T['$inferSelect']
+		>(table, (column, value) => {
+			return ilike(column, value)
+		})
 		function withSoftDeleted<Q extends PostgresQb>(q: Q, skip = false) {
 			if (skip) {
 				return q
@@ -195,6 +204,40 @@ export const createPostgresService = initializeService<PostgresDb>(
 		// 🚀 QUERY OPERATIONS
 		// ===============================
 
+		// async function handleQueries<TResult, TRels extends WithRelations[] = []>(
+		// 	queryOpts: QueryOpts<T, TResult, TRels>,
+		// 	hooks?: {
+		// 		beforeParse?: (q: PostgresQb) => PostgresQb
+		// 		afterParse?: (data: TResult) => TResult
+		// 	},
+		// ) {
+		// 	const { parse, ...opts } = queryOpts
+		// 	const { beforeParse, afterParse } = hooks || {}
+		// 	const declareQuery = withOpts(createBaseQuery(), rest)
+		// 	let query = declareQuery
+		// 	if (beforeParse) {
+		// 		// @ts-ignore
+		// 		query = beforeParse(query)
+		// 	}
+
+		// 	const data = await query
+
+		// 	// Apply custom parse function if provided
+		// 	if (parse) {
+		// 		return parse(
+		// 			opts.relations && opts.relations.length > 0
+		// 				? (data as RelationType<T, TRels>[])
+		// 				: (data as T['$inferSelect'][]),
+		// 		) as TResult
+		// 	}
+
+		// 	if (afterParse) {
+		// 		return afterParse(data as TResult)
+		// 	}
+
+		// 	return data as TResult
+		// }
+
 		const _queryOperations: QueryOperations<T, O> = {
 			findAll: async <
 				TRels extends WithRelations[] = [],
@@ -235,15 +278,13 @@ export const createPostgresService = initializeService<PostgresDb>(
 				opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
 			) => {
 				const { parse, ...queryOpts } = opts
-				let query = createBaseQuery()
-				query = withOpts(query, queryOpts)
+				let data = await withOpts(createBaseQuery(), queryOpts)
 				// Create a new object without relations for count query
 				const { relations: _, ...countOpts } = queryOpts
 				const totalCount = await _queryOperations.count(
 					undefined,
 					countOpts as QueryOpts<T, number, []>,
 				)
-				let data = await query
 
 				// Apply custom parse function if provided
 				if (parse) {
@@ -353,7 +394,6 @@ export const createPostgresService = initializeService<PostgresDb>(
 
 				return data as TResult
 			},
-
 			findByField: async <
 				K extends keyof T['$inferSelect'],
 				TRels extends WithRelations[] = [],
@@ -373,6 +413,44 @@ export const createPostgresService = initializeService<PostgresDb>(
 				// Apply custom parse function if provided
 				if (opts?.parse) {
 					return opts.parse(
+						opts.relations && opts.relations.length > 0
+							? (data as RelationType<T, TRels>[])
+							: (data as T['$inferSelect'][]),
+					) as TResult
+				}
+
+				return data as TResult
+			},
+			filter: async <
+				TRels extends WithRelations[] = [],
+				TResult = TRels['length'] extends 0
+					? T['$inferSelect'][]
+					: RelationType<T, TRels>[],
+			>(
+				criteria: FilterCriteria<T>,
+				opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
+			) => {
+				const { parse, ...queryOpts } = opts
+				let query = withOpts(createBaseQuery(), queryOpts)
+
+				const filterConditions = Object.entries(criteria)
+					.map(([field, filterExpr]) => {
+						if (!filterExpr) return null
+						return parseFilterExpression(
+							field as keyof T['$inferSelect'],
+							filterExpr,
+						)
+					})
+					.filter(Boolean) as SQLWrapper[]
+
+				if (filterConditions.length > 0) {
+					query = query.where(and(...filterConditions))
+				}
+
+				const data = await query
+
+				if (parse) {
+					return parse(
 						opts.relations && opts.relations.length > 0
 							? (data as RelationType<T, TRels>[])
 							: (data as T['$inferSelect'][]),
@@ -774,3 +852,5 @@ export function drizzleService<D extends PostgresDb>(
 		opts?: ServiceOptions<T, TExtensions>,
 	) => createPostgresService(db, table, opts) as Service<T, D> & TExtensions
 }
+
+// Helper function to parse Business Central filter expressions

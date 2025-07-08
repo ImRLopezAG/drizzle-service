@@ -1,11 +1,14 @@
 import {
+	createParserFunction,
 	errorHandler,
 	getTableName,
 	initializeService,
+	sqliteIlike,
 	tryHandler,
 } from '@/builder'
 import type {
 	BaseEntity,
+	FilterCriteria,
 	Handler,
 	IdType,
 	MutationOperations,
@@ -184,12 +187,53 @@ export const createSqliteService = initializeService<SQLiteDb>(
 			return query
 		}
 
+		const parseFilterExpression = createParserFunction<
+			T,
+			keyof T['$inferSelect']
+		>(table, (column, value) => {
+			return sqliteIlike(column, value)
+		})
+
+		const createBaseQuery = () => db.select().from(table).$dynamic()
+
+		// async function handleQueries<TResult, TRels extends WithRelations[] = []>(
+		// 	queryOpts: QueryOpts<T, TResult, TRels>,
+		// 	hooks?: {
+		// 		beforeParse?: (q: SQLiteQb) => SQLiteQb
+		// 		afterParse?: (data: TResult) => TResult
+		// 	},
+		// ) {
+		// 	const { parse, ...opts } = queryOpts
+		// 	const { beforeParse, afterParse } = hooks || {}
+		// 	let query = withOpts(createBaseQuery(), rest)
+
+		// 	if (beforeParse) {
+		// 		// @ts-ignore
+		// 		query = beforeParse(query)
+		// 	}
+
+		// 	const data = await query
+
+		// 	// Apply custom parse function if provided
+		// 	if (parse) {
+		// 		return parse(
+		// 			opts.relations && opts.relations.length > 0
+		// 				? (data as RelationType<T, TRels>[])
+		// 				: (data as T['$inferSelect'][]),
+		// 		) as TResult
+		// 	}
+
+		// 	if (afterParse) {
+		// 		return afterParse(data as TResult)
+		// 	}
+
+		// 	return data as TResult
+		// }
+
 		// ===============================
 		// 🚀 REPOSITORY IMPLEMENTATION
 		// ===============================
 
-		// @ts-ignore
-		const createBaseQuery = () => db.select().from(table).$dynamic()
 
 		// ===============================
 		// 🚀 QUERY OPERATIONS
@@ -235,10 +279,8 @@ export const createSqliteService = initializeService<SQLiteDb>(
 				opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
 			) => {
 				const { parse, ...queryOpts } = opts
-				let query = createBaseQuery()
-				query = withOpts(query, queryOpts)
+				let data = await withOpts(createBaseQuery(), queryOpts)
 				// Create a new object without relations for count query
-				let data = await query
 				const { relations: _, ...countOpts } = queryOpts
 				const totalCount = await baseMethods.count(
 					undefined,
@@ -385,6 +427,44 @@ export const createSqliteService = initializeService<SQLiteDb>(
 				// Apply custom parse function if provided
 				if (opts?.parse) {
 					return opts.parse(
+						opts.relations && opts.relations.length > 0
+							? (data as RelationType<T, TRels>[])
+							: (data as T['$inferSelect'][]),
+					) as TResult
+				}
+
+				return data as TResult
+			},
+			filter: async <
+				TRels extends WithRelations[] = [],
+				TResult = TRels['length'] extends 0
+					? T['$inferSelect'][]
+					: RelationType<T, TRels>[],
+			>(
+				criteria: FilterCriteria<T>,
+				opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
+			) => {
+				const { parse, ...queryOpts } = opts
+				let query = withOpts(createBaseQuery(), queryOpts)
+
+				const filterConditions = Object.entries(criteria)
+					.map(([field, filterExpr]) => {
+						if (!filterExpr) return null
+						return parseFilterExpression(
+							field as keyof T['$inferSelect'],
+							filterExpr,
+						)
+					})
+					.filter(Boolean) as SQLWrapper[]
+
+				if (filterConditions.length > 0) {
+					query = query.where(and(...filterConditions))
+				}
+
+				const data = await query
+
+				if (parse) {
+					return parse(
 						opts.relations && opts.relations.length > 0
 							? (data as RelationType<T, TRels>[])
 							: (data as T['$inferSelect'][]),
