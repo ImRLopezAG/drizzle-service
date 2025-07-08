@@ -1,0 +1,428 @@
+---
+title: API Reference
+description: Complete API reference for query operations including findAll, findById, findBy, and advanced filtering methods
+---
+import { TypeTable } from 'fumadocs-ui/components/type-table'
+
+
+## findAll()
+
+Retrieves all entities from the data source with optional filtering and relations.
+
+### Parameters
+
+<TypeTable
+  type={{
+    opts: {
+      description: "Optional query options for filtering, sorting, and including relations",
+      type: "QueryOpts<T, TResult, TRels>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns `Promise<TResult>` where `TResult` is based on whether relations are included:
+- Without relations: `T['$inferSelect'][]`
+- With relations: `RelationType<T, TRels>[]`
+
+### Example
+
+```typescript
+// Basic usage
+const todos = await todosService.findAll()
+console.log(`Found ${todos.length} todos`)
+
+// With pagination and ordering
+const paginatedTodos = await todosService.findAll({
+  page: 1,
+  limit: 10,
+  orderBy: { createdAt: 'desc' }
+})
+
+// With workspace filtering
+const workspaceTodos = await todosService.findAll({
+  workspace: {
+    field: 'tenant',
+    value: 'company-abc'
+  }
+})
+```
+
+## findById()
+
+Finds a single entity by its unique identifier.
+
+### Parameters
+
+<TypeTable
+  type={{
+    id: {
+      description: "The unique identifier of the entity",
+      type: "IdType<T, TOpts>",
+      required: true
+    }
+  }}
+/>
+
+### Returns
+
+Returns `Promise<TResult | null>` where `TResult` defaults to `T['$inferSelect']`.
+
+### Example
+
+```typescript
+const todo = await todosService.findById('todo-123')
+
+if (todo) {
+  console.log('Found todo:', todo.title)
+  console.log('Status:', todo.status)
+} else {
+  console.log('Todo not found')
+}
+
+// Non-existent ID returns null
+const nonExistent = await todosService.findById('non-existent-id')
+console.log(nonExistent) // null
+```
+
+## findBy()
+
+Finds entities that match the specified criteria using exact matching (AND condition).
+
+### Parameters
+
+<TypeTable
+  type={{
+    criteria: {
+      description: "Partial entity object containing the search criteria",
+      type: "Partial<T['$inferSelect']>",
+      required: true
+    },
+    opts: {
+      description: "Optional query options for filtering, sorting, and including relations",
+      type: "QueryOpts<T, TResult, TRels>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns `Promise<TResult>` where `TResult` is based on whether relations are included.
+
+### Example
+
+```typescript
+// Find todos by multiple criteria (AND condition)
+const todos = await todosService.findBy({
+  userId: 'user-123',
+  priority: 'high'
+})
+
+// All returned todos match ALL criteria
+todos.forEach(todo => {
+  console.log(`${todo.title} - User: ${todo.userId}, Priority: ${todo.priority}`)
+})
+
+// Find completed todos
+const completedTodos = await todosService.findBy({ status: 'done' })
+console.log(`Found ${completedTodos.length} completed todos`)
+```
+
+## findByMatching()
+
+Finds entities that match any of the specified criteria using OR condition logic.
+
+### Parameters
+
+<TypeTable
+  type={{
+    criteria: {
+      description: "Partial entity object containing the search criteria",
+      type: "Partial<T['$inferSelect']>",
+      required: true
+    },
+    opts: {
+      description: "Optional query options for filtering, sorting, and including relations",
+      type: "QueryOpts<T, TResult, TRels>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns `Promise<TResult>` where `TResult` is based on whether relations are included.
+
+### Example
+
+```typescript
+// Find todos matching ANY of the criteria (OR condition)
+const todos = await todosService.findByMatching({
+  status: 'done',
+  priority: 'high'
+})
+
+// All returned todos match AT LEAST ONE criteria
+todos.forEach(todo => {
+  const reason = todo.status === 'done' ? 'completed' : 'high priority'
+  console.log(`${todo.title} - Found because: ${reason}`)
+})
+```
+
+## findByField()
+
+Finds entities by a specific field and its value.
+
+### Parameters
+
+<TypeTable
+  type={{
+    field: {
+      description: "The field name to search by",
+      type: "keyof T['$inferSelect']",
+      required: true
+    },
+    value: {
+      description: "The value to match against the specified field",
+      type: "T['$inferSelect'][K]",
+      required: true
+    },
+    opts: {
+      description: "Optional query options for filtering, sorting, and including relations",
+      type: "QueryOpts<T, TResult, TRels>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns `Promise<TResult>` where `TResult` is based on whether relations are included.
+
+### Example
+
+```typescript
+// Find all completed todos
+const doneTodos = await todosService.findByField('status', 'done')
+console.log(`Found ${doneTodos.length} completed todos`)
+
+// Find todos by priority
+const highPriorityTodos = await todosService.findByField('priority', 'high')
+highPriorityTodos.forEach(todo => {
+  console.log(`High priority: ${todo.title}`)
+})
+```
+
+## count()
+
+Counts the number of entities that match the specified criteria.
+
+### Parameters
+
+<TypeTable
+  type={{
+    criteria: {
+      description: "Optional partial entity object containing the search criteria",
+      type: "Partial<T['$inferSelect']>",
+      required: false
+    },
+    opts: {
+      description: "Optional query options for additional filtering",
+      type: "QueryOpts<T, number>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns `Promise<number>` - the count of matching entities.
+
+### Example
+
+```typescript
+// Count all todos
+const totalCount = await todosService.count()
+console.log(`Total todos: ${totalCount}`)
+
+// Count by criteria
+const highPriorityCount = await todosService.count({ priority: 'high' })
+const lowPriorityCount = await todosService.count({ priority: 'low' })
+const mediumPriorityCount = await todosService.count({ priority: 'medium' })
+
+console.log(`High: ${highPriorityCount}, Medium: ${mediumPriorityCount}, Low: ${lowPriorityCount}`)
+
+// Count completed todos
+const doneTasksCount = await todosService.count({ status: 'done' })
+console.log(`Completed tasks: ${doneTasksCount}`)
+```
+
+## findWithCursor()
+
+Performs cursor-based pagination to retrieve entities. Useful for efficient pagination through large datasets.
+
+### Parameters
+
+<TypeTable
+  type={{
+    opts: {
+      description: "Query options including cursor information for pagination",
+      type: "QueryOpts<T, TResult, TRels>",
+      required: true
+    }
+  }}
+/>
+
+### Returns
+
+Returns `Promise<PaginationResult<T>>` containing:
+- `items`: Array of entities
+- `nextCursor`: Cursor for next page (null if no more pages)
+- `pagination`: Metadata with page info, total count, and navigation flags
+
+### Example
+
+```typescript
+// First page with cursor pagination
+const firstPage = await todosService.findWithCursor({
+  limit: 3,
+  orderBy: { createdAt: 'desc' }
+})
+
+console.log(`Page 1: ${firstPage.items.length} items`)
+console.log(`Total: ${firstPage.pagination.total}`)
+console.log(`Has next: ${firstPage.pagination.hasNext}`)
+
+// Get second page if available
+if (firstPage.nextCursor) {
+  const secondPage = await todosService.findWithCursor({
+    limit: 3,
+    cursor: firstPage.nextCursor,
+    orderBy: { createdAt: 'desc' }
+  })
+  
+  console.log(`Page 2: ${secondPage.items.length} items`)
+  console.log(`Page number: ${secondPage.pagination.page}`)
+}
+```
+
+## filter()
+
+Performs advanced filtering using Business Central style filter expressions with operators like ranges, wildcards, and comparisons.
+
+### Parameters
+
+<TypeTable
+  type={{
+    criteria: {
+      description: "Object mapping field names to filter expressions",
+      type: "FilterCriteria<T>",
+      required: true
+    },
+    opts: {
+      description: "Optional query options for additional filtering, sorting, and including relations",
+      type: "QueryOpts<T, TResult, TRels>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns `Promise<TResult>` where `TResult` is based on whether relations are included.
+
+### Filter Expression Format
+
+Filter expressions use the format: `[filterExpression, ...values]`
+
+- **Range**: `['%1..%2', 1000, 5000]` - Between 1000 and 5000
+- **Wildcard**: `['*%1*', 'search']` - Contains 'search'
+- **Multiple values**: `['%1|%2|%3', 'A', 'B', 'C']` - Equals A, B, or C
+- **Comparison**: `['>%1', 100]` - Greater than 100
+- **Case insensitive**: `['@*%1*', 'Search']` - Contains 'Search' (case insensitive)
+
+### Example
+
+```typescript
+// Range filtering (example shown for reference)
+const rangeFilteredTodos = await todosService.filter({
+  // Note: Actual filter implementation may vary based on field types
+  priority: ['%1|%2', 'high', 'medium'] // High or medium priority
+})
+
+console.log(`Found ${rangeFilteredTodos.length} high/medium priority todos`)
+```
+
+## QueryOpts&lt;T&gt;
+
+Common options available for most query operations.
+
+<TypeTable
+  type={{
+    page: {
+      description: "Page number for pagination (1-based)",
+      type: "number",
+      required: false
+    },
+    limit: {
+      description: "Maximum number of records to return",
+      type: "number",
+      required: false
+    },
+    orderBy: {
+      description: "Sort order specification for fields",
+      type: "{ [P in keyof T['$inferSelect']]?: 'asc' | 'desc' }",
+      required: false
+    },
+    withDeleted: {
+      description: "Include soft-deleted records in results",
+      type: "boolean",
+      required: false
+    },
+    cursor: {
+      description: "Cursor for pagination (used with findWithCursor)",
+      type: "Date | null",
+      required: false
+    },
+    relations: {
+      description: "Array of relations to include (joins)",
+      type: "TRels",
+      required: false
+    },
+    workspace: {
+      description: "Workspace filtering for multi-tenant applications",
+      type: "{ field: keyof T['$inferSelect']; value: any }",
+      required: false
+    },
+    custom: {
+      description: "Custom SQL expressions for advanced filtering",
+      type: "SQL",
+      required: false
+    },
+    parse: {
+      description: "Custom parser function for transforming results",
+      type: "(data: any[]) => TResult",
+      required: false
+    }
+  }}
+/>
+
+### Query Options Example
+
+```typescript
+const todos = await todosService.findAll({
+  page: 1,
+  limit: 20,
+  orderBy: { 
+    priority: 'desc',
+    createdAt: 'asc'
+  },
+  workspace: {
+    field: 'tenant',
+    value: 'company-abc'
+  }
+})
+```

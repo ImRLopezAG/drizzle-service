@@ -1,0 +1,122 @@
+---
+title: Methods
+index: true
+description: High-performance bulk operations for creating, updating, and deleting multiple records efficiently with transaction support
+---
+
+import { TypeTable } from 'fumadocs-ui/components/type-table'
+
+The Drizzle Service provides high-performance bulk operations that allow you to efficiently process multiple records in single database transactions. These operations are optimized for performance and provide comprehensive error handling for batch processing scenarios.
+
+## Key Features
+
+- **High Performance**: Optimized for processing large datasets with minimal database round trips
+- **Transaction Safety**: All bulk operations are wrapped in database transactions for consistency
+- **Partial Success Handling**: Support for handling partial failures in bulk operations
+- **Memory Efficient**: Processes large datasets without excessive memory usage
+- **Type Safety**: Full TypeScript support with compile-time validation
+- **Error Reporting**: Detailed error reporting for individual operations within bulk operations
+- **Soft Delete Support**: Bulk soft delete operations respect service soft delete configuration
+
+## Available Operations
+
+### Bulk Mutation Operations
+
+| Operation | Description |
+|-----------|-------------|
+| `bulkCreate(data[])` | Create multiple records in a single transaction |
+| `bulkUpdate(updates[])` | Update multiple records with individual change sets |
+| `bulkDelete(ids[])` | Soft delete multiple records (respects soft delete configuration) |
+| `bulkHardDelete(ids[])` | Permanently delete multiple records from the database |
+
+## Operation Types
+
+### Bulk Create
+
+Creates multiple records efficiently in a single database transaction:
+
+<TypeTable
+  type={{
+    data: {
+      description: 'Array of objects containing data for new records',
+      type: 'T[\'$inferInsert\'][]',
+      required: true
+    },
+    hooks: {
+      description: 'Optional service hooks for lifecycle events',
+      type: 'ServiceHooks<T>',
+    }
+  }}
+/>
+
+### Bulk Update
+
+Updates multiple records with individual change sets:
+
+<TypeTable
+  type={{
+    data: {
+      description: 'Array of update objects containing ID and changes for each record',
+      type: 'Array<{ id: IdType<T, TOpts>; changes: Partial<Omit<T[\'$inferInsert\'], \'createdAt\' | \'id\'>>; }>',
+      required: true
+    },
+    hooks: {
+      description: 'Optional service hooks for lifecycle events',
+      type: 'ServiceHooks<T>',
+    }
+  }}
+/>
+
+### Bulk Delete
+
+Deletes multiple records by their primary keys:
+
+<TypeTable
+  type={{
+    ids: {
+      description: 'Array of primary key values for records to delete',
+      type: 'IdType<T, TOpts>[]',
+      required: true
+    },
+    hooks: {
+      description: 'Optional service hooks for lifecycle events',
+      type: 'ServiceHooks<T>',
+    }
+  }}
+/>
+
+## Return Types
+
+Bulk operations return different response formats:
+
+- **bulkCreate**: `Handler<T['$inferSelect'][]>` - Array of created records or error
+- **bulkUpdate**: `Handler<T['$inferSelect'][]>` - Array of updated records or error  
+- **bulkDelete**: `Promise<{ readonly success: boolean; readonly message?: string }>` - Operation result summary
+- **bulkHardDelete**: `Promise<{ readonly success: boolean; readonly message?: string }>` - Operation result summary
+
+## Performance Considerations
+
+### Batch Processing
+
+For large datasets, bulk operations automatically handle batching:
+
+- **Default Batch Size**: 1000 records per batch
+- **Configurable**: Adjustable based on your database and memory constraints
+- **Memory Management**: Prevents memory overflow on large operations
+- **Progress Tracking**: Optional progress callbacks for long-running operations
+
+### Transaction Management
+
+- **Atomic Operations**: Each bulk operation runs in a single transaction
+- **Rollback Support**: Failed operations rollback all changes in the batch
+- **Deadlock Prevention**: Automatic retry logic for deadlock scenarios
+- **Connection Pooling**: Efficient use of database connections
+
+## Error Handling
+
+Bulk operations provide comprehensive error handling:
+
+- **Validation Errors**: Individual record validation failures
+- **Constraint Violations**: Foreign key and unique constraint violations
+- **Partial Failures**: Some records succeed while others fail
+- **Transaction Rollback**: Complete rollback on critical failures

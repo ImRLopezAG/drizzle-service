@@ -44,7 +44,6 @@ export const createSqliteService = initializeService<SQLiteDb>(
 		type T = typeof table
 		type O = typeof opts
 		const {
-			caching,
 			defaultLimit = 100,
 			maxLimit = 1000,
 			override,

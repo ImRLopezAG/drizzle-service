@@ -71,12 +71,6 @@ export type ServiceOptions<
 	readonly defaultLimit?: number
 	readonly maxLimit?: number
 	readonly soft?: SoftDeleteOption<T>
-	caching?: {
-		get?: <K, V>(key: K) => V | null
-		set?: <K, V>(key: K, value: V, ttl?: number) => void
-		clear?: () => void
-		delete?: <K>(key: K) => void
-	}
 	override?: (baseMethods: ServiceMethods<T>) => Partial<ServiceMethods<T>>
 } & (T['$inferSelect'] extends { id: string }
 	? {

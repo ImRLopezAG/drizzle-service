@@ -1,739 +1,608 @@
 ---
-title: Examples
-description: Real-world examples and use cases for bulk operations in Drizzle Service.
+title: Bulk Operations Examples
+description: Practical examples demonstrating how to use bulk operations for high-performance batch processing
 ---
 
-import { Banner } from 'fumadocs-ui/components/banner'
-import { Callout } from 'fumadocs-ui/components/callout'
-import { Step, Steps } from 'fumadocs-ui/components/steps'
-import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
 
-# Bulk Operations Examples
+## Basic Setup
 
-Comprehensive real-world examples demonstrating how to effectively use bulk operations for data import, batch processing, and large-scale data management scenarios.
+First, let's set up service instances for our examples:
 
-## Data Import & Migration
+```typescript title="Service Setup"
+import { drizzleService } from 'drizzle-service/pg' // or 'drizzle-service/sqlite'
+import { users, todos, products, orders, db } from './schema'
 
-### CSV Data Import System
+// Initialize the service
+const service = drizzleService(db) // [!code highlight]
 
-Import large datasets from CSV files with validation, error handling, and progress tracking.
+// User service
+const userService = service(users) // [!code highlight]
 
-```typescript title="CSV Import Service"
-async function importUsersFromCSV(csvData: UserCSVData[]) {
-  const BATCH_SIZE = 200
-  const results = {
-    success: 0,
-    failed: 0,
-    errors: [] as string[]
+// Todo service with soft delete
+const todoService = service(todos, { // [!code highlight]
+  soft: {
+    field: 'status', // [!code word:status]
+    deletedValue: 'canceled',
+    notDeletedValue: 'active'
   }
+})
+
+// Product service for e-commerce examples
+const productService = service(products) // [!code highlight]
+
+// Order service for transaction examples
+const orderService = service(orders) // [!code highlight]
+```
+
+## Bulk Create Operations
+
+### Basic Bulk Creation
+
+```typescript title="Create Multiple Users"
+// Prepare user data
+const newUsers = [
+  {
+    email: 'alice@company.com',
+    name: 'Alice Johnson',
+    role: 'developer',
+    department: 'engineering'
+  },
+  {
+    email: 'bob@company.com',
+    name: 'Bob Smith',
+    role: 'designer',
+    department: 'product'
+  },
+  {
+    email: 'carol@company.com',
+    name: 'Carol Davis',
+    role: 'manager',
+    department: 'engineering'
+  }
+]
+
+// Bulk create users
+const [error, createdUsers] = await userService.bulkCreate(newUsers) // [!code word:bulkCreate]
+
+if (error) {
+  console.error('Bulk create failed:', error.message)
+} else {
+  console.log(`Successfully created ${createdUsers.length} users`) // [!code ]
+  createdUsers.forEach(user => { // [!code ]
+    console.log(`- ${user.name} (${user.email})`) // [!code ]
+  }) // [!code ]
+}
+```
+
+### Large Dataset Import
+
+```typescript title="Import Large Dataset with Batching"
+// Import a large CSV dataset
+const importUsersFromCSV = async (csvData: any[]) => {
+  const batchSize = 500 // Process 500 records at a time
+  const results = []
   
-  for (let i = 0; i < csvData.length; i += BATCH_SIZE) {
-    const batch = csvData.slice(i, i + BATCH_SIZE)
+  for (let i = 0; i < csvData.length; i += batchSize) {
+    const batch = csvData.slice(i, i + batchSize)
     
-    // Transform CSV data to user format
-    const userData = batch.map(row => ({
-      email: row.email?.toLowerCase().trim(), // [!code highlight]
-      name: `${row.firstName} ${row.lastName}`.trim(), // [!code highlight]
-      status: 'active' as const,
-      metadata: { // [!code highlight]
-        importSource: 'csv', // [!code highlight]
-        importBatch: Math.floor(i / BATCH_SIZE) + 1, // [!code highlight]
-        importTimestamp: new Date() // [!code highlight]
-      } // [!code highlight]
+    // Transform CSV data to user objects
+    const userBatch = batch.map(row => ({
+      email: row.email.toLowerCase(),
+      name: `${row.firstName} ${row.lastName}`,
+      role: row.role || 'user',
+      department: row.department,
+      joinDate: new Date(row.joinDate),
+      metadata: {
+        importBatch: Math.floor(i / batchSize) + 1,
+        originalRowNumber: csvData.indexOf(row) + 1
+      }
     }))
     
-    const [error, users] = await userService.bulkCreate(
-      userData,
-      {
-        beforeAction: async (data) => { // [!code highlight]
-          // Validate email formats
-          const invalidEmails = data.filter(u => !isValidEmail(u.email)) // [!code highlight]
-          if (invalidEmails.length > 0) { // [!code highlight]
-            throw new Error(`Invalid emails: ${invalidEmails.map(u => u.email).join(', ')}`) // [!code highlight]
-          } // [!code highlight]
-          
-          // Check for existing emails
-          const existingUsers = await userService.findBy({ // [!code highlight]
-            email: { in: data.map(u => u.email) } // [!code highlight]
-          }) // [!code highlight]
-          
-          if (existingUsers.length > 0) { // [!code highlight]
-            const duplicateEmails = existingUsers.map(u => u.email) // [!code highlight]
-            throw new Error(`Duplicate emails found: ${duplicateEmails.join(', ')}`) // [!code highlight]
-          } // [!code highlight]
-        }, // [!code highlight]
-        afterAction: async (createdUsers) => { // [!code highlight]
-          // Send welcome emails in background
-          setImmediate(() => { // [!code highlight]
-            createdUsers.forEach(user => // [!code highlight]
-              emailQueue.add('welcome-email', { userId: user.id }) // [!code highlight]
-            ) // [!code highlight]
-          }) // [!code highlight]
-          
-          // Update import statistics
-          await importStatsService.update({ // [!code highlight]
-            totalImported: createdUsers.length, // [!code highlight]
-            lastBatchAt: new Date() // [!code highlight]
-          }) // [!code highlight]
-        }, // [!code highlight]
-        onError: async (error) => { // [!code highlight]
-          await logger.error('CSV import batch failed', { // [!code highlight]
-            batchIndex: Math.floor(i / BATCH_SIZE), // [!code highlight]
-            batchSize: batch.length, // [!code highlight]
-            error: error.message // [!code highlight]
-          }) // [!code highlight]
-        } // [!code highlight]
-      }
-    )
+    const [error, created] = await userService.bulkCreate(userBatch)
     
     if (error) {
-      results.failed += batch.length
-      results.errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`)
+      console.error(`Batch ${Math.floor(i / batchSize) + 1} failed:`, error.message)
+      results.push({ batch: Math.floor(i / batchSize) + 1, success: false, error })
     } else {
-      results.success += users.length
+      console.log(`Batch ${Math.floor(i / batchSize) + 1}: ${created.length} users created`)
+      results.push({ batch: Math.floor(i / batchSize) + 1, success: true, count: created.length })
     }
-    
-    // Progress reporting
-    console.log(`Processed batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(csvData.length / BATCH_SIZE)}`) // [!code highlight]
   }
   
   return results
 }
+
+// Usage
+const csvUsers = await parseCsvFile('users.csv')
+const importResults = await importUsersFromCSV(csvUsers)
 ```
 
-### Database Migration with Rollback
+### Bulk Create with Validation
 
-Migrate data between systems with automatic rollback on failure.
-
-```typescript title="Migration Service"
-async function migrateUserProfiles(migrationData: MigrationData[]) {
-  const migrationLog: string[] = [] // [!code highlight]
-  const createdUserIds: number[] = [] // [!code highlight]
-  
-  try {
-    // Step 1: Create users
-    const userData = migrationData.map(data => ({ // [!code highlight]
-      email: data.email, // [!code highlight]
-      name: data.name, // [!code highlight]
-      legacyId: data.oldSystemId // [!code highlight]
-    })) // [!code highlight]
+```typescript
+// Create products with price validation
+const createProducts = async (productData: any[]) => {
+  // Pre-validate data
+  const validatedProducts = productData.map(product => {
+    if (!product.name || product.name.length < 3) {
+      throw new Error(`Product name too short: ${product.name}`)
+    }
     
-    const [userError, users] = await userService.bulkCreate(userData, {
-      afterAction: async (createdUsers) => { // [!code highlight]
-        createdUserIds.push(...createdUsers.map(u => u.id)) // [!code highlight]
-        migrationLog.push(`Created ${createdUsers.length} users`) // [!code highlight]
-      } // [!code highlight]
-    })
-    
-    if (userError) throw userError // [!code highlight]
-    
-    // Step 2: Create profiles
-    const profileData = migrationData.map((data, index) => ({ // [!code highlight]
-      userId: users[index].id, // [!code highlight]
-      bio: data.profile?.bio, // [!code highlight]
-      avatar: data.profile?.avatar, // [!code highlight]
-      preferences: data.profile?.preferences // [!code highlight]
-    })) // [!code highlight]
-    
-    const [profileError, profiles] = await profileService.bulkCreate(profileData, {
-      afterAction: async (createdProfiles) => { // [!code highlight]
-        migrationLog.push(`Created ${createdProfiles.length} profiles`) // [!code highlight]
-      } // [!code highlight]
-    })
-    
-    if (profileError) { // [!code highlight]
-      // Rollback users if profile creation fails
-      await userService.bulkHardDelete(createdUserIds) // [!code highlight]
-      migrationLog.push('Rolled back user creation due to profile failure') // [!code highlight]
-      throw profileError // [!code highlight]
-    } // [!code highlight]
+    if (product.price <= 0) {
+      throw new Error(`Invalid price for ${product.name}: ${product.price}`)
+    }
     
     return {
-      success: true,
-      users,
-      profiles,
-      log: migrationLog
+      ...product,
+      sku: product.sku || generateSKU(product.name),
+      price: Math.round(product.price * 100) / 100, // Round to 2 decimal places
+      createdAt: new Date(),
+      status: 'active'
     }
-    
-  } catch (error) {
-    migrationLog.push(`Migration failed: ${error.message}`) // [!code highlight]
-    
-    // Additional cleanup if needed
-    if (createdUserIds.length > 0) { // [!code highlight]
-      await cleanupFailedMigration(createdUserIds) // [!code highlight]
-    } // [!code highlight]
-    
-    return {
-      success: false,
-      error: error.message,
-      log: migrationLog
-    }
-  }
-}
-
-async function cleanupFailedMigration(userIds: number[]) { // [!code highlight]
-  await Promise.all([ // [!code highlight]
-    sessionService.deleteByUserIds(userIds), // [!code highlight]
-    cacheService.clearUserCaches(userIds), // [!code highlight]
-    auditService.logFailedMigration(userIds) // [!code highlight]
-  ]) // [!code highlight]
-} // [!code highlight]
-```
-
-## E-commerce Batch Operations
-
-### Inventory Management System
-
-Update product inventory across multiple locations with validation.
-
-```typescript title="Inventory Update Service"
-async function updateInventoryBatch(inventoryUpdates: InventoryUpdate[]) {
-  const updates = inventoryUpdates.map(update => ({
-    id: update.productId,
-    changes: {
-      stock: update.newStock, // [!code highlight]
-      lastUpdated: new Date(), // [!code highlight]
-      locationId: update.locationId // [!code highlight]
-    }
-  }))
-  
-  const [error, updatedProducts] = await productService.bulkUpdate(
-    updates,
-    {
-      beforeAction: async (updateData) => { // [!code highlight]
-        // Validate stock levels
-        for (const update of updateData) { // [!code highlight]
-          if (update.changes.stock < 0) { // [!code highlight]
-            throw new Error(`Invalid stock level for product ${update.id}: ${update.changes.stock}`) // [!code highlight]
-          } // [!code highlight]
-        } // [!code highlight]
-        
-        // Check for concurrent updates
-        const productIds = updateData.map(u => u.id) // [!code highlight]
-        const currentProducts = await productService.findBy({ // [!code highlight]
-          id: { in: productIds } // [!code highlight]
-        }) // [!code highlight]
-        
-        // Validate no concurrent modifications
-        const staleUpdates = currentProducts.filter(product => { // [!code highlight]
-          const updateData = inventoryUpdates.find(u => u.productId === product.id) // [!code highlight]
-          return updateData && product.lastUpdated > updateData.lastKnownUpdate // [!code highlight]
-        }) // [!code highlight]
-        
-        if (staleUpdates.length > 0) { // [!code highlight]
-          throw new Error(`Stale data detected for products: ${staleUpdates.map(p => p.id).join(', ')}`) // [!code highlight]
-        } // [!code highlight]
-      }, // [!code highlight]
-      afterAction: async (products) => { // [!code highlight]
-        // Update low stock alerts
-        const lowStockProducts = products.filter(p => p.stock <= p.lowStockThreshold) // [!code highlight]
-        
-        if (lowStockProducts.length > 0) { // [!code highlight]
-          await alertService.bulkCreate( // [!code highlight]
-            lowStockProducts.map(product => ({ // [!code highlight]
-              type: 'low_stock', // [!code highlight]
-              productId: product.id, // [!code highlight]
-              message: `Product ${product.name} is low on stock: ${product.stock} remaining`, // [!code highlight]
-              severity: product.stock === 0 ? 'critical' : 'warning' // [!code highlight]
-            })) // [!code highlight]
-          ) // [!code highlight]
-        } // [!code highlight]
-        
-        // Invalidate product caches
-        await Promise.all( // [!code highlight]
-          products.map(product => // [!code highlight]
-            cache.delete(`product:${product.id}`) // [!code highlight]
-          ) // [!code highlight]
-        ) // [!code highlight]
-        
-        // Notify inventory management system
-        await inventoryEventBus.publish('inventory.updated', { // [!code highlight]
-          productIds: products.map(p => p.id), // [!code highlight]
-          timestamp: new Date() // [!code highlight]
-        }) // [!code highlight]
-      } // [!code highlight]
-    }
-  )
-  
-  if (error) {
-    throw new Error(`Inventory update failed: ${error.message}`)
-  }
-  
-  return updatedProducts
-}
-```
-
-### Order Processing Pipeline
-
-Process multiple orders with status updates and notifications.
-
-```typescript title="Order Processing Service"
-async function processOrderBatch(orderIds: number[], newStatus: OrderStatus) {
-  const updates = orderIds.map(id => ({
-    id,
-    changes: {
-      status: newStatus, // [!code highlight]
-      statusChangedAt: new Date(), // [!code highlight]
-      processedBy: 'batch_processor' // [!code highlight]
-    }
-  }))
-  
-  const [error, updatedOrders] = await orderService.bulkUpdate(
-    updates,
-    {
-      beforeAction: async (updateData) => { // [!code highlight]
-        // Validate status transitions
-        const currentOrders = await orderService.findBy({ // [!code highlight]
-          id: { in: updateData.map(u => u.id) } // [!code highlight]
-        }) // [!code highlight]
-        
-        for (const order of currentOrders) { // [!code highlight]
-          if (!isValidStatusTransition(order.status, newStatus)) { // [!code highlight]
-            throw new Error( // [!code highlight]
-              `Invalid status transition for order ${order.id}: ${order.status} -> ${newStatus}` // [!code highlight]
-            ) // [!code highlight]
-          } // [!code highlight]
-        } // [!code highlight]
-        
-        // Check payment status for certain transitions
-        if (newStatus === 'shipped') { // [!code highlight]
-          const unpaidOrders = currentOrders.filter(o => o.paymentStatus !== 'paid') // [!code highlight]
-          if (unpaidOrders.length > 0) { // [!code highlight]
-            throw new Error(`Cannot ship unpaid orders: ${unpaidOrders.map(o => o.id).join(', ')}`) // [!code highlight]
-          } // [!code highlight]
-        } // [!code highlight]
-      }, // [!code highlight]
-      afterAction: async (orders) => { // [!code highlight]
-        // Create shipping labels for shipped orders
-        if (newStatus === 'shipped') { // [!code highlight]
-          await shippingService.bulkCreateLabels( // [!code highlight]
-            orders.map(order => ({ // [!code highlight]
-              orderId: order.id, // [!code highlight]
-              address: order.shippingAddress, // [!code highlight]
-              weight: order.totalWeight // [!code highlight]
-            })) // [!code highlight]
-          ) // [!code highlight]
-        } // [!code highlight]
-        
-        // Send status notifications
-        const notifications = orders.map(order => ({ // [!code highlight]
-          userId: order.userId, // [!code highlight]
-          type: 'order_status_change', // [!code highlight]
-          data: { // [!code highlight]
-            orderId: order.id, // [!code highlight]
-            newStatus: order.status, // [!code highlight]
-            message: getStatusChangeMessage(order.status), // [!code highlight]
-            trackingInfo: newStatus === 'shipped' ? order.trackingNumber : undefined // [!code highlight]
-          } // [!code highlight]
-        })) // [!code highlight]
-        
-        await notificationService.bulkCreate(notifications) // [!code highlight]
-        
-        // Update inventory for cancelled orders
-        if (newStatus === 'cancelled') { // [!code highlight]
-          await inventoryService.restoreOrderItems(orders) // [!code highlight]
-        } // [!code highlight]
-        
-        // Update analytics
-        await analyticsService.track('bulk_order_status_change', { // [!code highlight]
-          orderCount: orders.length, // [!code highlight]
-          newStatus, // [!code highlight]
-          timestamp: new Date() // [!code highlight]
-        }) // [!code highlight]
-      } // [!code highlight]
-    }
-  )
-  
-  if (error) {
-    throw new Error(`Order batch processing failed: ${error.message}`)
-  }
-  
-  return updatedOrders
-}
-
-function isValidStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): boolean { // [!code highlight]
-  const validTransitions: Record<OrderStatus, OrderStatus[]> = { // [!code highlight]
-    'pending': ['confirmed', 'cancelled'], // [!code highlight]
-    'confirmed': ['processing', 'cancelled'], // [!code highlight]
-    'processing': ['shipped', 'cancelled'], // [!code highlight]
-    'shipped': ['delivered', 'returned'], // [!code highlight]
-    'delivered': ['returned'], // [!code highlight]
-    'cancelled': [], // [!code highlight]
-    'returned': [] // [!code highlight]
-  } // [!code highlight]
-  
-  return validTransitions[currentStatus]?.includes(newStatus) ?? false // [!code highlight]
-} // [!code highlight]
-
-function getStatusChangeMessage(status: OrderStatus): string { // [!code highlight]
-  const messages: Record<OrderStatus, string> = { // [!code highlight]
-    'confirmed': 'Your order has been confirmed and is being prepared.', // [!code highlight]
-    'processing': 'Your order is currently being processed.', // [!code highlight]
-    'shipped': 'Your order has been shipped and is on its way!', // [!code highlight]
-    'delivered': 'Your order has been delivered. Thank you for your purchase!', // [!code highlight]
-    'cancelled': 'Your order has been cancelled.', // [!code highlight]
-    'returned': 'Your return has been processed.' // [!code highlight]
-  } // [!code highlight]
-  
-  return messages[status] || 'Your order status has been updated.' // [!code highlight]
-} // [!code highlight]
-```
-
-## User Management & Cleanup
-
-### User Account Deactivation
-
-Deactivate multiple user accounts with proper cleanup and archival.
-
-```typescript title="User Deactivation Service"
-async function deactivateUsersBatch(userIds: number[], reason: string) {
-  const result = await userService.bulkDelete(
-    userIds,
-    {
-      beforeAction: async (ids) => { // [!code highlight]
-        // Archive user data before deactivation
-        const users = await userService.findBy({ // [!code highlight]
-          id: { in: ids } // [!code highlight]
-        }) // [!code highlight]
-        
-        // Create backup records
-        await archiveService.bulkCreate( // [!code highlight]
-          users.map(user => ({ // [!code highlight]
-            entityType: 'user', // [!code highlight]
-            entityId: user.id, // [!code highlight]
-            data: user, // [!code highlight]
-            reason, // [!code highlight]
-            archivedAt: new Date(), // [!code highlight]
-            archivedBy: 'system' // [!code highlight]
-          })) // [!code highlight]
-        ) // [!code highlight]
-        
-        // Check for active dependencies
-        const activeOrders = await orderService.count({ // [!code highlight]
-          userId: { in: ids }, // [!code highlight]
-          status: { in: ['pending', 'confirmed', 'processing'] } // [!code highlight]
-        }) // [!code highlight]
-        
-        if (activeOrders > 0) { // [!code highlight]
-          throw new Error('Cannot deactivate users with active orders') // [!code highlight]
-        } // [!code highlight]
-        
-        // Check for admin users
-        const adminUsers = users.filter(u => u.role === 'admin') // [!code highlight]
-        if (adminUsers.length > 0) { // [!code highlight]
-          const remainingAdmins = await userService.count({ // [!code highlight]
-            role: 'admin', // [!code highlight]
-            status: 'active', // [!code highlight]
-            id: { notIn: ids } // [!code highlight]
-          }) // [!code highlight]
-          
-          if (remainingAdmins === 0) { // [!code highlight]
-            throw new Error('Cannot deactivate all admin users') // [!code highlight]
-          } // [!code highlight]
-        } // [!code highlight]
-      }, // [!code highlight]
-      afterAction: async (ids) => { // [!code highlight]
-        // Clean up user sessions and tokens
-        await Promise.all([ // [!code highlight]
-          sessionService.deleteByUserIds(ids), // [!code highlight]
-          tokenService.revokeByUserIds(ids), // [!code highlight]
-          subscriptionService.cancelByUserIds(ids), // [!code highlight]
-          notificationService.removeByUserIds(ids) // [!code highlight]
-        ]) // [!code highlight]
-        
-        // Send deactivation notifications
-        const users = await userService.findBy({ // [!code highlight]
-          id: { in: ids } // [!code highlight]
-        }) // [!code highlight]
-        
-        await Promise.all( // [!code highlight]
-          users.map(user => // [!code highlight]
-            emailService.send(user.email, 'account-deactivated', { // [!code highlight]
-              name: user.name, // [!code highlight]
-              reason, // [!code highlight]
-              reactivationInstructions: getReactivationInstructions(reason) // [!code highlight]
-            }) // [!code highlight]
-          ) // [!code highlight]
-        ) // [!code highlight]
-        
-        // Log audit trail
-        await auditService.create({ // [!code highlight]
-          action: 'bulk_user_deactivation', // [!code highlight]
-          entityIds: ids, // [!code highlight]
-          reason, // [!code highlight]
-          timestamp: new Date(), // [!code highlight]
-          performedBy: 'system' // [!code highlight]
-        }) // [!code highlight]
-        
-        console.log(`Successfully deactivated ${ids.length} users`) // [!code highlight]
-      } // [!code highlight]
-    }
-  )
-  
-  return result
-}
-
-function getReactivationInstructions(reason: string): string { // [!code highlight]
-  const instructions: Record<string, string> = { // [!code highlight]
-    'inactivity': 'Contact support to reactivate your account.', // [!code highlight]
-    'policy_violation': 'Review our terms of service and contact support for reactivation.', // [!code highlight]
-    'security_breach': 'Complete security verification to reactivate your account.', // [!code highlight]
-    'user_request': 'Log in anytime to reactivate your account.' // [!code highlight]
-  } // [!code highlight]
-  
-  return instructions[reason] || 'Contact support for account reactivation.' // [!code highlight]
-} // [!code highlight]
-```
-
-### Data Cleanup Operations
-
-Clean up inactive users and associated data with comprehensive logging.
-
-```typescript title="Data Cleanup Service"
-async function cleanupInactiveUsers(daysInactive: number = 365) {
-  const cutoffDate = new Date() // [!code highlight]
-  cutoffDate.setDate(cutoffDate.getDate() - daysInactive) // [!code highlight]
-  
-  // Find inactive users
-  const inactiveUsers = await userService.findBy({
-    lastLoginAt: { lt: cutoffDate }, // [!code highlight]
-    status: 'active'
   })
   
-  if (inactiveUsers.length === 0) {
-    console.log('No inactive users found')
-    return { success: true, cleaned: 0 }
+  const [error, created] = await productService.bulkCreate(validatedProducts)
+  
+  if (error) {
+    console.error('Product creation failed:', error.message)
+    return { success: false, error: error.message }
   }
-  
-  console.log(`Found ${inactiveUsers.length} inactive users`)
-  
-  const BATCH_SIZE = 100 // [!code highlight]
-  const userIds = inactiveUsers.map(u => u.id)
-  const cleanupLog: string[] = [] // [!code highlight]
-  
-  for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
-    const batchIds = userIds.slice(i, i + BATCH_SIZE)
-    
-    const result = await userService.bulkDelete(
-      batchIds,
-      {
-        beforeAction: async (ids) => { // [!code highlight]
-          // Archive user data comprehensively
-          const users = await userService.findBy({ id: { in: ids } }) // [!code highlight]
-          
-          await Promise.all([ // [!code highlight]
-            // Archive main user data
-            archiveService.bulkCreate( // [!code highlight]
-              users.map(user => ({ // [!code highlight]
-                entityType: 'user', // [!code highlight]
-                entityId: user.id, // [!code highlight]
-                data: user, // [!code highlight]
-                reason: 'inactive_cleanup', // [!code highlight]
-                daysInactive, // [!code highlight]
-                archivedAt: new Date() // [!code highlight]
-              })) // [!code highlight]
-            ), // [!code highlight]
-            
-            // Archive user preferences
-            userPreferenceService.archiveByUserIds(ids), // [!code highlight]
-            
-            // Archive user activity logs
-            activityLogService.archiveByUserIds(ids) // [!code highlight]
-          ]) // [!code highlight]
-          
-          cleanupLog.push(`Archived data for batch ${Math.floor(i / BATCH_SIZE) + 1}: ${ids.length} users`) // [!code highlight]
-        }, // [!code highlight]
-        afterAction: async (ids) => { // [!code highlight]
-          // Comprehensive cleanup
-          await Promise.all([ // [!code highlight]
-            sessionService.deleteByUserIds(ids), // [!code highlight]
-            tokenService.revokeByUserIds(ids), // [!code highlight]
-            preferenceService.deleteByUserIds(ids), // [!code highlight]
-            cacheService.clearUserCaches(ids), // [!code highlight]
-            searchIndexService.removeUserProfiles(ids) // [!code highlight]
-          ]) // [!code highlight]
-          
-          cleanupLog.push(`Cleaned up batch ${Math.floor(i / BATCH_SIZE) + 1}: ${ids.length} users`) // [!code highlight]
-        }, // [!code highlight]
-        onError: async (error) => { // [!code highlight]
-          cleanupLog.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${error.message}`) // [!code highlight]
-        } // [!code highlight]
-      }
-    )
-    
-    if (!result.success) {
-      console.error(`Cleanup batch failed: ${result.message}`)
-    }
-  }
-  
-  // Generate cleanup report
-  await reportService.generateCleanupReport({ // [!code highlight]
-    totalFound: inactiveUsers.length, // [!code highlight]
-    daysInactive, // [!code highlight]
-    cleanupLog, // [!code highlight]
-    timestamp: new Date() // [!code highlight]
-  }) // [!code highlight]
   
   return {
     success: true,
-    cleaned: inactiveUsers.length,
-    log: cleanupLog
+    products: created,
+    message: `Created ${created.length} products successfully`
   }
 }
 ```
 
-## Error Handling & Recovery
+## Bulk Update Operations
 
-### Partial Failure Recovery
+### Basic Bulk Updates
 
-Handle partial failures gracefully with fallback strategies.
+```typescript
+// Promote multiple users to managers
+const userPromotions = [
+  { id: 'user-1', changes: { role: 'manager', promotedAt: new Date() } },
+  { id: 'user-2', changes: { role: 'manager', promotedAt: new Date() } },
+  { id: 'user-3', changes: { role: 'senior-developer', promotedAt: new Date() } }
+]
 
-```typescript title="Resilient Bulk Operations"
-async function resilientBulkCreate(userData: CreateUserData[]) {
-  const results = {
-    successful: [] as User[], // [!code highlight]
-    failed: [] as { data: CreateUserData; error: string }[], // [!code highlight]
-    retryQueue: [] as CreateUserData[] // [!code highlight]
-  }
+const [error, updatedUsers] = await userService.bulkUpdate(userPromotions)
+
+if (error) {
+  console.error('Bulk update failed:', error.message)
+} else {
+  console.log('Successfully updated user roles:')
+  updatedUsers.forEach(user => {
+    console.log(`- ${user.name}: ${user.role}`)
+  })
+}
+```
+
+### Conditional Bulk Updates
+
+```typescript
+// Update todo priorities based on due dates
+const updateTodoPriorities = async () => {
+  // Find todos due soon
+  const upcomingTodos = await todoService.findAll({
+    custom: sql`${todos.dueDate} BETWEEN NOW() AND NOW() + INTERVAL '3 days'`
+  })
   
-  // Try bulk create first
-  const [bulkError, users] = await userService.bulkCreate(userData)
-  
-  if (!bulkError) {
-    results.successful = users
-    return results
-  }
-  
-  console.warn('Bulk create failed, attempting individual recovery') // [!code highlight]
-  
-  // Individual recovery with retry logic
-  for (const data of userData) {
-    let attempts = 0 // [!code highlight]
-    const maxAttempts = 3 // [!code highlight]
+  // Prepare priority updates
+  const priorityUpdates = upcomingTodos.map(todo => {
+    const daysUntilDue = Math.ceil(
+      (new Date(todo.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    )
     
-    while (attempts < maxAttempts) { // [!code highlight]
-      const [error, user] = await userService.create(data)
+    let newPriority = todo.priority
+    if (daysUntilDue <= 1) {
+      newPriority = 'urgent'
+    } else if (daysUntilDue <= 2) {
+      newPriority = 'high'
+    }
+    
+    return {
+      id: todo.id,
+      changes: {
+        priority: newPriority,
+        priorityUpdatedAt: new Date(),
+        autoUpdated: true
+      }
+    }
+  }).filter(update => update.changes.priority !== upcomingTodos.find(t => t.id === update.id)?.priority)
+  
+  if (priorityUpdates.length === 0) {
+    return { message: 'No priority updates needed' }
+  }
+  
+  const [error, updated] = await todoService.bulkUpdate(priorityUpdates)
+  
+  if (error) {
+    console.error('Priority update failed:', error.message)
+    return { success: false, error }
+  }
+  
+  return {
+    success: true,
+    updatedCount: updated.length,
+    message: `Updated priorities for ${updated.length} todos`
+  }
+}
+```
+
+### Bulk Status Updates
+
+```typescript
+// Update order statuses based on external processing results
+const processOrderUpdates = async (processingResults: any[]) => {
+  const statusUpdates = processingResults.map(result => ({
+    id: result.orderId,
+    changes: {
+      status: result.success ? 'fulfilled' : 'failed',
+      processedAt: new Date(),
+      processingNotes: result.notes,
+      trackingNumber: result.success ? result.trackingNumber : null
+    }
+  }))
+  
+  const [error, updatedOrders] = await orderService.bulkUpdate(statusUpdates)
+  
+  if (error) {
+    console.error('Order status update failed:', error.message)
+    return null
+  }
+  
+  // Send notifications for fulfilled orders
+  const fulfilledOrders = updatedOrders.filter(order => order.status === 'fulfilled')
+  await Promise.all(
+    fulfilledOrders.map(order => 
+      sendShippingNotification(order.customerEmail, order.trackingNumber)
+    )
+  )
+  
+  return {
+    totalUpdated: updatedOrders.length,
+    fulfilled: fulfilledOrders.length,
+    failed: updatedOrders.filter(order => order.status === 'failed').length
+  }
+}
+```
+
+## Bulk Delete Operations
+
+### Basic Bulk Soft Delete
+
+```typescript
+// Mark multiple todos as canceled
+const todoIdsToCancel = ['todo-1', 'todo-2', 'todo-3', 'todo-4']
+
+const result = await todoService.bulkDelete(todoIdsToCancel)
+
+if (result.success) {
+  console.log(`${result.affectedCount} todos marked as canceled`)
+  console.log(result.message)
+} else {
+  console.error('Bulk delete failed')
+}
+```
+
+### Cleanup Operations
+
+```typescript
+// Delete users who haven't logged in for over 2 years
+const cleanupInactiveUsers = async () => {
+  const twoYearsAgo = new Date()
+  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+  
+  // Find inactive users
+  const inactiveUsers = await userService.findAll({
+    custom: sql`${users.lastLoginAt} < ${twoYearsAgo} OR ${users.lastLoginAt} IS NULL`,
+    limit: 1000 // Process in manageable chunks
+  })
+  
+  if (inactiveUsers.length === 0) {
+    return { message: 'No inactive users found' }
+  }
+  
+  // Archive user data before deletion
+  await archiveUserData(inactiveUsers.map(u => u.id))
+  
+  // Bulk delete inactive users
+  const userIds = inactiveUsers.map(u => u.id)
+  const result = await userService.bulkDelete(userIds)
+  
+  return {
+    scanned: inactiveUsers.length,
+    deleted: result.affectedCount,
+    success: result.success
+  }
+}
+```
+
+### Cascade Delete Operations
+
+```typescript
+// Delete users and all their related data
+const deleteUsersWithData = async (userIds: string[]) => {
+  try {
+    // First, delete related todos
+    const userTodos = await todoService.findAll({
+      custom: inArray(todos.userId, userIds)
+    })
+    
+    if (userTodos.length > 0) {
+      const todoIds = userTodos.map(todo => todo.id)
+      await todoService.bulkHardDelete(todoIds)
+      console.log(`Deleted ${todoIds.length} related todos`)
+    }
+    
+    // Delete user orders
+    const userOrders = await orderService.findAll({
+      custom: inArray(orders.userId, userIds)
+    })
+    
+    if (userOrders.length > 0) {
+      const orderIds = userOrders.map(order => order.id)
+      await orderService.bulkHardDelete(orderIds)
+      console.log(`Deleted ${orderIds.length} related orders`)
+    }
+    
+    // Finally, delete users
+    const result = await userService.bulkHardDelete(userIds)
+    
+    return {
+      success: result.success,
+      usersDeleted: result.affectedCount,
+      todosDeleted: userTodos.length,
+      ordersDeleted: userOrders.length
+    }
+    
+  } catch (error) {
+    console.error('Cascade delete failed:', error)
+    return { success: false, error: error.message }
+  }
+}
+```
+
+## Bulk Upsert Operations
+
+### Product Catalog Updates
+
+```typescript
+// Update product catalog from external feed
+const updateProductCatalog = async (productFeed: any[]) => {
+  const productData = productFeed.map(item => ({
+    sku: item.sku,
+    name: item.name,
+    description: item.description,
+    price: parseFloat(item.price),
+    categoryId: item.categoryId,
+    inStock: item.quantity > 0,
+    quantity: item.quantity,
+    lastUpdated: new Date()
+  }))
+  
+  // Use bulkCreate for new products or handle conflicts manually
+  const [error, upserted] = await productService.bulkCreate(productData)
+  
+  if (error) {
+    console.error('Product catalog update failed:', error.message)
+    // Handle unique constraint violations by trying individual updates
+    return await handleProductUpsertConflicts(productData)
+  }
+  
+  const inserted = upserted.filter(p => !p.updatedAt || p.createdAt === p.updatedAt)
+  const updated = upserted.filter(p => p.updatedAt && p.createdAt !== p.updatedAt)
+  
+  return {
+    total: upserted.length,
+    inserted: inserted.length,
+    updated: updated.length,
+    message: `Processed ${upserted.length} products: ${inserted.length} new, ${updated.length} updated`
+  }
+}
+```
+
+### User Synchronization
+
+```typescript
+// Synchronize users from external HR system
+const syncUsersFromHR = async (hrUsers: any[]) => {
+  const userData = hrUsers.map(hrUser => ({
+    employeeId: hrUser.id,
+    email: hrUser.email,
+    name: `${hrUser.firstName} ${hrUser.lastName}`,
+    department: hrUser.department,
+    role: hrUser.role,
+    status: hrUser.active ? 'active' : 'inactive',
+    joinDate: new Date(hrUser.startDate),
+    lastSyncedAt: new Date()
+  }))
+  
+  // Use bulkCreate for new users or handle updates separately
+  const [error, synced] = await userService.bulkCreate(userData)
+  
+  if (error) {
+    console.error('User sync failed:', error.message)
+    // Handle conflicts by trying individual operations
+    return await handleUserSyncConflicts(userData)
+  }
+  
+  // Deactivate users not present in HR system
+  const hrEmployeeIds = hrUsers.map(u => u.id)
+  const allUsers = await userService.findAll({ limit: 10000 })
+  const usersToDeactivate = allUsers
+    .filter(user => user.employeeId && !hrEmployeeIds.includes(user.employeeId))
+    .map(user => ({
+      id: user.id,
+      changes: { status: 'inactive', lastSyncedAt: new Date() }
+    }))
+  
+  if (usersToDeactivate.length > 0) {
+    await userService.bulkUpdate(usersToDeactivate)
+  }
+  
+  return {
+    success: true,
+    synchronized: synced.length,
+    deactivated: usersToDeactivate.length
+  }
+}
+```
+
+## Error Handling and Recovery
+
+### Robust Bulk Processing
+
+```typescript
+const safeBulkOperation = async <T>(
+  operation: () => Promise<[Error | null, T | null]>,
+  retryCount = 3
+): Promise<{ success: boolean; data?: T; error?: string }> => {
+  
+  for (let attempt = 1; attempt <= retryCount; attempt++) {
+    try {
+      const [error, result] = await operation()
       
       if (error) {
-        attempts++ // [!code highlight]
+        // Check if error is retryable
+        if (error.message.includes('deadlock') || error.message.includes('timeout')) {
+          if (attempt < retryCount) {
+            console.log(`Attempt ${attempt} failed, retrying...`, error.message)
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000)) // Exponential backoff
+            continue
+          }
+        }
         
-        if (attempts >= maxAttempts) { // [!code highlight]
-          if (isRetryableError(error)) { // [!code highlight]
-            results.retryQueue.push(data) // [!code highlight]
-          } else { // [!code highlight]
-            results.failed.push({ data, error: error.message }) // [!code highlight]
-          } // [!code highlight]
-        } else { // [!code highlight]
-          // Wait before retry with exponential backoff
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempts) * 1000)) // [!code highlight]
-        } // [!code highlight]
-      } else {
-        results.successful.push(user)
-        break // [!code highlight]
+        return { success: false, error: error.message }
       }
+      
+      return { success: true, data: result }
+      
+    } catch (error) {
+      if (attempt === retryCount) {
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : String(error) 
+        }
+      }
+      
+      console.log(`Attempt ${attempt} failed with exception, retrying...`)
+      await new Promise(resolve => setTimeout(resolve, attempt * 1000))
+    }
+  }
+  
+  return { success: false, error: 'Max retries exceeded' }
+}
+
+// Usage with bulk create
+const createUsersWithRetry = async (userData: any[]) => {
+  return await safeBulkOperation(
+    () => userService.bulkCreate(userData),
+    3 // Retry up to 3 times
+  )
+}
+```
+
+### Partial Failure Handling
+
+```typescript
+// Process updates with individual error handling
+const processUpdatesWithErrorHandling = async (updates: any[]) => {
+  const results = {
+    successful: [],
+    failed: [],
+    total: updates.length
+  }
+  
+  // Split into smaller batches to isolate failures
+  const batchSize = 50
+  
+  for (let i = 0; i < updates.length; i += batchSize) {
+    const batch = updates.slice(i, i + batchSize)
+    
+    const [error, updated] = await userService.bulkUpdate(batch)
+    
+    if (error) {
+      // If batch fails, try individual updates
+      console.log(`Batch failed, trying individual updates...`)
+      
+      for (const update of batch) {
+        const [individualError, individualResult] = await userService.update(
+          update.id, 
+          update.changes
+        )
+        
+        if (individualError) {
+          results.failed.push({
+            id: update.id,
+            error: individualError.message
+          })
+        } else {
+          results.successful.push(individualResult)
+        }
+      }
+    } else {
+      results.successful.push(...updated)
     }
   }
   
   return results
 }
-
-function isRetryableError(error: Error): boolean { // [!code highlight]
-  const retryableMessages = [ // [!code highlight]
-    'connection timeout', // [!code highlight]
-    'database temporarily unavailable', // [!code highlight]
-    'lock timeout', // [!code highlight]
-    'deadlock detected' // [!code highlight]
-  ] // [!code highlight]
-  
-  return retryableMessages.some(msg => // [!code highlight]
-    error.message.toLowerCase().includes(msg) // [!code highlight]
-  ) // [!code highlight]
-} // [!code highlight]
 ```
 
-### Transaction Coordination
+## Performance Optimization
 
-Coordinate multiple bulk operations with proper rollback handling.
+### Memory-Efficient Processing
 
-```typescript title="Transaction Coordinator"
-async function coordinatedBulkOperations(
-  users: CreateUserData[],
-  profiles: CreateProfileData[],
-  permissions: CreatePermissionData[]
-) {
-  const operationLog: string[] = [] // [!code highlight]
-  const rollbackActions: (() => Promise<void>)[] = [] // [!code highlight]
+```typescript
+// Process very large datasets without memory issues
+const processLargeDataset = async (dataSource: AsyncIterable<any>) => {
+  const batchSize = 1000
+  let batch = []
+  let processedCount = 0
+  let errorCount = 0
   
-  try {
-    // Step 1: Create users
-    const [userError, createdUsers] = await userService.bulkCreate(users, {
-      afterAction: async (users) => { // [!code highlight]
-        operationLog.push(`Created ${users.length} users`) // [!code highlight]
-        rollbackActions.push(() => userService.bulkHardDelete(users.map(u => u.id))) // [!code highlight]
-      } // [!code highlight]
-    })
+  for await (const item of dataSource) {
+    batch.push(item)
     
-    if (userError) throw userError // [!code highlight]
-    
-    // Step 2: Create profiles
-    const profileData = profiles.map((profile, index) => ({ // [!code highlight]
-      ...profile, // [!code highlight]
-      userId: createdUsers[index].id // [!code highlight]
-    })) // [!code highlight]
-    
-    const [profileError, createdProfiles] = await profileService.bulkCreate(profileData, {
-      afterAction: async (profiles) => { // [!code highlight]
-        operationLog.push(`Created ${profiles.length} profiles`) // [!code highlight]
-        rollbackActions.push(() => profileService.bulkHardDelete(profiles.map(p => p.id))) // [!code highlight]
-      } // [!code highlight]
-    })
-    
-    if (profileError) throw profileError // [!code highlight]
-    
-    // Step 3: Create permissions
-    const permissionData = permissions.map((permission, index) => ({ // [!code highlight]
-      ...permission, // [!code highlight]
-      userId: createdUsers[index].id // [!code highlight]
-    })) // [!code highlight]
-    
-    const [permissionError, createdPermissions] = await permissionService.bulkCreate(permissionData, {
-      afterAction: async (permissions) => { // [!code highlight]
-        operationLog.push(`Created ${permissions.length} permissions`) // [!code highlight]
-      } // [!code highlight]
-    })
-    
-    if (permissionError) throw permissionError // [!code highlight]
-    
-    return {
-      success: true,
-      users: createdUsers,
-      profiles: createdProfiles,
-      permissions: createdPermissions,
-      log: operationLog
+    if (batch.length >= batchSize) {
+      const [error, results] = await userService.bulkCreate(batch)
+      
+      if (error) {
+        console.error(`Batch failed at count ${processedCount}:`, error.message)
+        errorCount++
+      } else {
+        processedCount += results.length
+      }
+      
+      // Clear batch for next iteration
+      batch = []
+      
+      // Optional: Add delay to prevent overwhelming the database
+      if (processedCount % 10000 === 0) {
+        console.log(`Processed ${processedCount} records...`)
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
     }
-    
-  } catch (error) {
-    console.error('Coordinated operation failed, rolling back...') // [!code highlight]
-    
-    // Execute rollback actions in reverse order
-    for (let i = rollbackActions.length - 1; i >= 0; i--) { // [!code highlight]
-      try { // [!code highlight]
-        await rollbackActions[i]() // [!code highlight]
-        operationLog.push(`Rolled back operation ${i + 1}`) // [!code highlight]
-      } catch (rollbackError) { // [!code highlight]
-        operationLog.push(`Rollback failed for operation ${i + 1}: ${rollbackError.message}`) // [!code highlight]
-      } // [!code highlight]
-    } // [!code highlight]
-    
-    return {
-      success: false,
-      error: error.message,
-      log: operationLog
+  }
+  
+  // Process remaining items
+  if (batch.length > 0) {
+    const [error, results] = await userService.bulkCreate(batch)
+    if (!error) {
+      processedCount += results.length
+    } else {
+      errorCount++
     }
+  }
+  
+  return {
+    totalProcessed: processedCount,
+    errors: errorCount,
+    success: errorCount === 0
   }
 }
 ```
-
-<Callout type="info">
-These examples demonstrate production-ready bulk operation patterns. Always adapt batch sizes, error handling, and validation logic to your specific use case and infrastructure requirements.
-</Callout>

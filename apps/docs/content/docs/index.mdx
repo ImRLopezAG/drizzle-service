@@ -1,208 +1,235 @@
 ---
-title: Drizzle Service
-description: A powerful, type-safe service layer for Drizzle ORM with advanced CRUD operations, pagination, and bulk operations.
+title: Drizzle Service Documentation
+index: true
+description: A comprehensive, type-safe service layer for Drizzle ORM with support for PostgreSQL and SQLite, featuring advanced query capabilities, mutations, and bulk operations
 ---
 
-import { Banner } from 'fumadocs-ui/components/banner'
-import { Callout } from 'fumadocs-ui/components/callout'
-import { CodeBlock } from 'fumadocs-ui/components/codeblock'
-import { Step, Steps } from 'fumadocs-ui/components/steps'
-import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
-import { Card, Cards } from 'fumadocs-ui/components/card'
-import { BookOpen, Edit, Zap, Lightbulb } from 'lucide-react'
-
+import { Database, Shield, Zap } from 'lucide-react'
 
 # Drizzle Service
 
-A powerful, type-safe service layer library for [Drizzle ORM](https://orm.drizzle.team/) that provides advanced CRUD operations, pagination, soft deletes, relations, and bulk operations for **PostgreSQL** and **SQLite**.
+A powerful, type-safe service layer for Drizzle ORM that provides a comprehensive set of operations for building robust database applications.
 
-## ✨ Features
+## Overview
 
-- 🛡️ **Type-Safe**: Full TypeScript support with inferred types from your Drizzle schemas
-- 🗄️ **Multi-Database**: Supports both PostgreSQL and SQLite with database-specific optimizations
-- 📄 **Pagination**: Built-in offset-based and cursor-based pagination
-- 🔗 **Relations**: Advanced join operations (left, inner, right joins)
-- 🗑️ **Soft Deletes**: Configurable soft delete functionality with custom fields
-- ⚡ **Bulk Operations**: Efficient bulk create, update, and delete operations
-- 🪝 **Lifecycle Hooks**: Before/after action hooks for all mutation operations
-- 🏢 **Multi-Tenant**: Workspace-based filtering for multi-tenant applications
-- 🔧 **Extensible**: Override and extend default service methods
-- 🎯 **Error Handling**: Consistent error handling with success/error patterns
-- 🚀 **Performance**: Optimized queries with caching support
+Drizzle Service is a high-level abstraction layer built on top of Drizzle ORM that provides:
 
-## 📦 Installation
+- **Universal Database Support** - Works seamlessly with PostgreSQL and SQLite
+- **Type-Safe Operations** - Full TypeScript support with compile-time validation
+- **Advanced Query Capabilities** - Complex filtering, pagination, relations, and aggregations
+- **Robust Mutation Operations** - Create, update, delete with comprehensive error handling
+- **High-Performance Bulk Operations** - Efficient batch processing for large datasets
+- **Soft Delete Support** - Configurable soft delete functionality
+- **Lifecycle Hooks** - Before and after hooks for custom business logic
+
+<Cards>
+  <Card 
+    icon={<Database />}
+    href="/docs/queries" 
+    title="Query Operations"
+  >
+    Comprehensive query operations with advanced filtering, pagination, and relations support.
+  </Card>
+  <Card 
+    icon={<Zap />}
+    href="/docs/mutations" 
+    title="Mutation Operations"
+  >
+    Safe and efficient create, update, and delete operations with lifecycle hooks.
+  </Card>
+  <Card 
+    icon={<Shield />}
+    href="/docs/bulk-operations" 
+    title="Bulk Operations"
+  >
+    High-performance bulk operations for processing large datasets efficiently.
+  </Card>
+</Cards>
+
+## Key Features
+
+### Type Safety
+Built with TypeScript from the ground up, providing compile-time validation and excellent IDE support.
+
+### Database Agnostic
+Single API that works with both PostgreSQL and SQLite, allowing you to switch databases without changing your application code.
+
+### Performance Optimized
+Efficient query building, automatic batching for bulk operations, and optimized SQL generation.
+
+### Flexible Configuration
+Extensive configuration options for soft deletes, pagination limits, and custom business logic.
+
+## Quick Start
+
+### Installation
 
 ```npm
 npm install drizzle-service drizzle-orm
 ```
 
-## 🚀 Quick Start
+### Basic Usage
 
-<Steps>
-  <Step>
-    ### Define Your Schema
+```typescript title="E-commerce Product Management"
+import { drizzleService } from 'drizzle-service/pg'
+import { products, categories, orders, db } from './schema'
 
-    Start by defining your database schema using Drizzle ORM's schema definition:
+// Initialize the service with database instance
+const service = drizzleService(db) // [!code highlight]
 
-    ```typescript
-    // schema.ts
-    import { pgTable, serial, text, timestamp, pgEnum } from 'drizzle-orm/pg-core'
+// Product catalog service with soft delete
+const productService = service(products, { // [!code highlight]
+  defaultLimit: 50,
+  maxLimit: 500,
+  soft: {
+    field: 'status', // [!code word:status]
+    deletedValue: 'discontinued',
+    notDeletedValue: 'active'
+  }
+})
 
-    export const statusEnum = pgEnum('status', ['active', 'inactive', 'deleted'])
+// Category management service
+const categoryService = service(categories) // [!code highlight]
 
-    export const users = pgTable('users', {
-      id: serial('id').primaryKey(),
-      email: text('email').notNull().unique(),
-      name: text('name').notNull(),
-      status: statusEnum('status').default('active').notNull(),
-      createdAt: timestamp('created_at').defaultNow().notNull(),
-      updatedAt: timestamp('updated_at').defaultNow().notNull(),
-    })
-    ```
-  </Step>
+// Order processing service
+const orderService = service(orders, { // [!code highlight]
+  soft: {
+    field: 'status', // [!code word:status]
+    deletedValue: 'canceled',
+    notDeletedValue: 'pending'
+  }
+})
 
-  <Step>
-    ### Setup Database Connection
+// Query product catalog
+const activeProducts = await productService.findAll({
+  orderBy: { updatedAt: 'desc' }, // [!code focus]
+  limit: 20 // [!code focus]
+})
 
-    Configure your database connection and create a service instance:
+const featuredProducts = await productService.findBy({ 
+  featured: true, // [!code highlight]
+  inStock: true // [!code highlight]
+})
 
-    <Tabs items={["PostgreSQL", "SQLite"]}>
-      <Tab value="PostgreSQL">
-        ```typescript
-        // db.ts
-        import { drizzle } from 'drizzle-orm/postgres-js'
-        import { drizzleService } from 'drizzle-service/pg'
-        import postgres from 'postgres'
-        import * as schema from './schema'
+// Product search by category
+const electronicsProducts = await productService.findByField(
+  'categoryId', 
+  'electronics-category-id'
+)
 
-        const client = postgres(process.env.DATABASE_URL!)
-        const db = drizzle(client, { schema })
+// Create new product
+const [error, newProduct] = await productService.create({ // [!code word:create]
+  name: 'Wireless Bluetooth Headphones',
+  description: 'Premium noise-canceling wireless headphones',
+  price: 149.99,
+  categoryId: 'electronics-category-id',
+  sku: 'WBH-001',
+  inStock: true,
+  featured: true
+})
 
-        // Create service instance
-        const service = drizzleService(db)
-        
-        // Create user service
-        export const userService = service(schema.users, {
-          defaultLimit: 50,
-          maxLimit: 500,
-          soft: { field: 'status', deletedValue: 'deleted' }
-        })
-        ```
-      </Tab>
-      <Tab value="SQLite">
-        ```typescript
-        // db.ts
-        import { drizzle } from 'drizzle-orm/better-sqlite3'
-        import { drizzleService } from 'drizzle-service/sqlite'
-        import Database from 'better-sqlite3'
-        import * as schema from './schema'
+if (error) {
+  console.error('Failed to create product:', error.message)
+} else {
+  console.log('Product created:', newProduct.id)
+}
 
-        const sqlite = new Database('sqlite.db')
-        const db = drizzle(sqlite, { schema })
+// Bulk import products from supplier
+const supplierProducts = [
+  {
+    name: 'Gaming Mouse',
+    price: 79.99,
+    categoryId: 'electronics-category-id',
+    sku: 'GM-001'
+  },
+  {
+    name: 'Mechanical Keyboard',
+    price: 129.99,
+    categoryId: 'electronics-category-id', 
+    sku: 'MK-001'
+  }
+]
 
-        // Create service instance
-        const service = drizzleService(db)
-        
-        // Create user service
-        export const userService = service(schema.users, {
-          defaultLimit: 50,
-          maxLimit: 500,
-        })
-        ```
-      </Tab>
-    </Tabs>
-  </Step>
+const [bulkError, importedProducts] = await productService.bulkCreate(supplierProducts) // [!code word:bulkCreate]
+```
 
-  <Step>
-    ### Use the Service
+## Architecture
 
-    Start performing database operations with full type safety:
+The service layer is built with a modular architecture that separates concerns:
 
-    ```typescript
-    // main.ts
-    import { userService } from './db'
+### Service Builder
+The core service builder creates type-safe service instances with all necessary operations.
 
-    async function main() {
-      // Create a user
-      const [error, user] = await userService.create({
-        email: 'john@example.com',
-        name: 'John Doe'
-      })
-      
-      if (error) throw error
-      console.log('Created user:', user)
+### Operation Modules
+- **Query Operations** - Read operations with filtering and pagination
+- **Mutation Operations** - Write operations with validation and hooks  
+- **Bulk Operations** - Batch operations for high-performance processing
 
-      // Find users with pagination
-      const users = await userService.findAll({
-        page: 1,
-        limit: 10,
-        orderBy: { createdAt: 'desc' }
-      })
+### Database Adapters
+Specialized adapters for PostgreSQL and SQLite that handle database-specific optimizations.
 
-      // Find by criteria
-      const activeUsers = await userService.findBy({
-        status: 'active'
-      }, {
-        orderBy: { name: 'asc' },
-        limit: 20
-      })
+## Configuration Options
 
-      // Bulk operations
-      const [bulkError, newUsers] = await userService.bulkCreate([
-        { email: 'alice@example.com', name: 'Alice Smith' },
-        { email: 'bob@example.com', name: 'Bob Johnson' }
-      ])
+<TypeTable
+  type={{
+    defaultLimit: {
+      description: 'Default number of records to return in query operations',
+      type: 'number',
+      default: '100'
+    },
+    maxLimit: {
+      description: 'Maximum allowed limit for query operations',
+      type: 'number',
+      default: '1000'
+    },
+    soft: {
+      description: 'Soft delete configuration for the entity',
+      type: 'SoftDeleteConfig<T>',
+    },
+    id: {
+      description: 'Custom primary key field name (if not "id")',
+      type: 'keyof T[\'$inferSelect\']',
+    },
+    override: {
+      description: 'Function to override or extend default service methods',
+      type: '(baseMethods: ServiceMethods<T>) => Partial<ServiceMethods<T>>',
     }
-    ```
-  </Step>
-</Steps>
+  }}
+/>
+
+## Error Handling
+
+The service uses a comprehensive error handling approach:
+
+- **Handler Pattern** - Mutations return `[error, result]` tuples for explicit error handling
+- **Detailed Error Information** - Rich error objects with context and suggestions
+- **Validation Errors** - Type-safe validation with detailed field-level errors
+- **Database Constraint Handling** - Automatic handling of unique constraints and foreign key violations
+
+## Best Practices
+
+### Service Configuration
+Configure services once at application startup and reuse instances throughout your application.
+
+### Error Handling
+Always check for errors in mutation operations and handle them appropriately.
+
+### Pagination
+Use cursor-based pagination for large datasets and implement reasonable default limits.
+
+### Bulk Operations
+Use bulk operations for processing multiple records to improve performance and maintain data consistency.
 
 ## Next Steps
 
-
-## Why Drizzle Service?
-
-<Callout type="warn">
-While Drizzle ORM is powerful and flexible, it can require significant boilerplate for common operations like pagination, soft deletes, and bulk operations. Drizzle Service eliminates this repetition while maintaining type safety. with this service layer, you can focus on your business logic instead of writing repetitive database code.
-</Callout>
-
-<Tabs items={["Before (Plain Drizzle)", "After (Drizzle Service)"]}>
-  <Tab value="Before (Plain Drizzle)">
-    ```typescript
-    // Manual pagination and error handling
-    const page = 1
-    const limit = 20
-    const offset = (page - 1) * limit
-    try {
-      const users = await db
-        .select()
-        .from(userTable)
-        .where(ne(userTable.status, 'deleted'))
-        .limit(limit)
-        .offset(offset)
-        .orderBy(desc(userTable.createdAt))
-        
-      const total = await db
-        .select({ count: count() })
-        .from(userTable)
-        .where(ne(userTable.status, 'deleted'))
-        
-      // Manual result formatting...
-    } catch (error) {
-      // Manual error handling...
-    }
-    ```
-  </Tab>
-  <Tab value="After (Drizzle Service)">
-    ```typescript
-    // Clean, declarative API with built-in pagination and error handling
-    const users = await userService.findAll({
-      page: 1,
-      limit: 20,
-      orderBy: { createdAt: 'desc' }
-    })
-    ```
-  </Tab>
-</Tabs>
-
-The service layer provides a clean, consistent API while preserving Drizzle's performance and flexibility underneath.
+<Cards>
+  <Card href="/docs/queries/api-reference" title="Query API Reference">
+    Complete API documentation for all query operations.
+  </Card>
+  <Card href="/docs/mutations/api-reference" title="Mutation API Reference">
+    Detailed documentation for create, update, and delete operations.
+  </Card>
+  <Card href="/docs/bulk-operations/api-reference" title="Bulk Operations API Reference">
+    API reference for high-performance bulk operations.
+  </Card>
+</Cards>

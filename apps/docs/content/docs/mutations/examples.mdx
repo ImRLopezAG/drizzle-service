@@ -1,0 +1,696 @@
+---
+title: Mutations Examples
+description: Real-world examples demonstrating mutation operations for e-commerce, user management, and content systems
+---
+
+## E-commerce Product Management
+
+### Product Creation and Inventory Management
+
+```typescript title="Creating Products with Inventory Tracking"
+import { drizzleService } from 'drizzle-service/pg'
+import { products, inventory, categories, db } from './schema'
+
+// Initialize the service
+const service = drizzleService(db) // [!code highlight]
+
+// Product service with soft delete for discontinued items
+const productService = service(products, { // [!code highlight]
+  soft: {
+    field: 'status', // [!code word:status]
+    deletedValue: 'discontinued',
+    notDeletedValue: 'active'
+  }
+})
+
+const inventoryService = service(inventory) // [!code highlight]
+
+// Create a new product with full details
+const [error, newProduct] = await productService.create({ // [!code word:create]
+  name: 'Wireless Noise-Canceling Headphones',
+  description: 'Premium over-ear headphones with active noise cancellation and 30-hour battery life',
+  price: 299.99, // [!code highlight]
+  categoryId: 'electronics-audio',
+  sku: 'WNC-HP-001', // [!code highlight]
+  brand: 'AudioTech',
+  weight: 280, // grams
+  dimensions: '19 x 15 x 8 cm',
+  features: ['Bluetooth 5.0', 'Active Noise Cancellation', '30h Battery', 'Quick Charge'],
+  warrantyMonths: 24,
+  status: 'active'
+})
+
+if (error) {
+  console.error('Product creation failed:', error.message)
+  // Handle validation errors, duplicate SKU, etc.
+} else {
+  console.log('Product created successfully:', newProduct.id)
+  
+  // Create initial inventory record
+  const [invError, inventory] = await inventoryService.create({ // [!code]
+    productId: newProduct.id, // [!code]
+    quantity: 50, // [!code]
+    reservedQuantity: 0, // [!code]
+    reorderLevel: 10,
+    location: 'WAREHOUSE-A',
+    lastRestocked: new Date()
+  })
+}
+```
+
+### Product Updates and Price Management
+
+```typescript title="Updating Product Information and Pricing"
+// Update product pricing and availability
+const [error, updatedProduct] = await productService.update(productId, {
+  price: 249.99, // Sale price
+  salePrice: 199.99,
+  saleStartDate: new Date('2024-11-25'),
+  saleEndDate: new Date('2024-12-02'),
+  featured: true // Feature for Black Friday
+})
+
+if (error) {
+  console.error('Price update failed:', error.message)
+} else {
+  console.log(`Product ${updatedProduct.name} now on sale: $${updatedProduct.salePrice}`)
+  
+  // Send notification to marketing team
+  await notifyMarketingTeam('PRICE_UPDATE', {
+    productId: updatedProduct.id,
+    oldPrice: 249.99,
+    newPrice: updatedProduct.salePrice,
+    saleEndDate: updatedProduct.saleEndDate
+  })
+}
+```
+
+### Product Lifecycle Management
+
+```typescript title="Managing Product Lifecycle with Soft Deletes"
+// Discontinue a product (soft delete)
+const discontinueResult = await productService.delete(productId)
+
+if (discontinueResult.success) {
+  console.log('Product discontinued:', discontinueResult.message)
+  
+  // Update inventory to prevent new orders
+  await inventoryService.update(inventoryId, {
+    quantity: 0,
+    status: 'discontinued',
+    discontinuedDate: new Date()
+  })
+  
+  // Notify sales team
+  await notifySalesTeam('PRODUCT_DISCONTINUED', { productId })
+} else {
+  console.error('Failed to discontinue product')
+}
+
+// Later: Restore a discontinued product if needed
+const restoreResult = await productService.restore(productId)
+
+if (restoreResult.success) {
+  console.log('Product restored to catalog')
+  
+  // Reactivate inventory
+  await inventoryService.update(inventoryId, {
+    status: 'active',
+    restoredDate: new Date()
+  })
+}
+```
+
+## User Account Management
+
+### User Registration and Profile Creation
+
+```typescript title="Complete User Registration Process"
+import { users, userProfiles, subscriptions } from './schema'
+
+const userService = drizzleService(db)(users, {
+  soft: {
+    field: 'status',
+    deletedValue: 'deactivated',
+    notDeletedValue: 'active'
+  }
+})
+
+const profileService = drizzleService(db)(userProfiles)
+const subscriptionService = drizzleService(db)(subscriptions)
+
+// Register new user with complete profile
+const registerUser = async (userData: {
+  email: string
+  password: string
+  firstName: string
+  lastName: string
+  phoneNumber?: string
+  subscriptionTier: 'free' | 'premium' | 'enterprise'
+}) => {
+  // Create user account
+  const [userError, newUser] = await userService.create({
+    email: userData.email.toLowerCase(),
+    passwordHash: await hashPassword(userData.password),
+    status: 'active',
+    emailVerified: false,
+    createdAt: new Date(),
+    lastLoginAt: null
+  }, {
+    afterAction: async (user) => {
+      // Send welcome email
+      await sendWelcomeEmail(user.email, userData.firstName)
+      console.log(`Welcome email sent to ${user.email}`)
+    },
+    onError: async (error) => {
+      await logRegistrationError(userData.email, error.message)
+    }
+  })
+
+  if (userError) {
+    if (userError.message.includes('duplicate key')) {
+      throw new Error('Email address already registered')
+    }
+    throw new Error(`Registration failed: ${userError.message}`)
+  }
+
+  // Create user profile
+  const [profileError, profile] = await profileService.create({
+    userId: newUser.id,
+    firstName: userData.firstName,
+    lastName: userData.lastName,
+    phoneNumber: userData.phoneNumber,
+    timezone: 'UTC',
+    language: 'en',
+    notificationPreferences: {
+      email: true,
+      sms: false,
+      push: true
+    }
+  })
+
+  // Create subscription
+  const [subError, subscription] = await subscriptionService.create({
+    userId: newUser.id,
+    tier: userData.subscriptionTier,
+    status: 'active',
+    startDate: new Date(),
+    autoRenew: true
+  })
+
+  return {
+    user: newUser,
+    profile,
+    subscription,
+    success: !userError && !profileError && !subError
+  }
+}
+
+// Usage
+try {
+  const result = await registerUser({
+    email: 'john.doe@company.com',
+    password: 'SecurePassword123!',
+    firstName: 'John',
+    lastName: 'Doe',
+    phoneNumber: '+1-555-0123',
+    subscriptionTier: 'premium'
+  })
+  
+  console.log('User registered successfully:', result.user.id)
+} catch (error) {
+  console.error('Registration failed:', error.message)
+}
+```
+
+### User Profile Updates and Preferences
+
+```typescript title="Managing User Preferences and Settings"
+// Update user profile with validation
+const updateUserProfile = async (userId: string, updates: {
+  firstName?: string
+  lastName?: string
+  phoneNumber?: string
+  timezone?: string
+  avatar?: string
+  bio?: string
+}) => {
+  const [error, updatedProfile] = await profileService.update(userId, updates, {
+    beforeAction: async (data) => {//[!code highlight]
+      // Validate phone number format if provided
+      if (updates.phoneNumber && !isValidPhoneNumber(updates.phoneNumber)) {
+        throw new Error('Invalid phone number format')
+      }
+      
+      // Validate timezone
+      if (updates.timezone && !isValidTimezone(updates.timezone)) {
+        throw new Error('Invalid timezone')
+      }
+    },
+    afterAction: async (profile) => {//[!code highlight]
+      // Update user's last activity
+      await userService.update(profile.userId, {
+        lastActivityAt: new Date()
+      })
+      
+      // Invalidate profile cache
+      await cacheService.delete(`profile:${profile.userId}`)
+    }
+  })
+
+  return { error, profile: updatedProfile }
+}
+
+// Update notification preferences
+const [error, user] = await userService.update(userId, {
+  notificationPreferences: {
+    email: true,
+    sms: false,
+    push: true,
+    marketing: false
+  },
+  lastUpdatedAt: new Date()
+})
+```
+
+## Content Management System
+
+### Article and Blog Post Management
+
+```typescript title="Content Creation and Publishing Workflow"
+import { articles, authors, categories, tags } from './schema'
+
+const articleService = drizzleService(db)(articles, {
+  soft: {
+    field: 'status',
+    deletedValue: 'archived',
+    notDeletedValue: 'published'
+  }
+})
+
+// Create new article with complete metadata
+const createArticle = async (articleData: {
+  title: string
+  content: string
+  excerpt: string
+  authorId: string
+  categoryId: string
+  tags: string[]
+  featuredImage?: string
+  publishDate?: Date
+  status: 'draft' | 'review' | 'published'
+}) => {
+  const [error, article] = await articleService.create({
+    title: articleData.title,
+    slug: generateSlug(articleData.title),
+    content: articleData.content,
+    excerpt: articleData.excerpt,
+    authorId: articleData.authorId,
+    categoryId: articleData.categoryId,
+    featuredImage: articleData.featuredImage,
+    status: articleData.status,
+    publishDate: articleData.publishDate || new Date(),
+    viewCount: 0,
+    likeCount: 0,
+    commentCount: 0,
+    seoTitle: articleData.title,
+    seoDescription: articleData.excerpt,
+    tags: articleData.tags
+  }, {
+    afterAction: async (article) => {
+      if (article.status === 'published') {
+        // Notify subscribers
+        await notifySubscribers('NEW_ARTICLE', {
+          articleId: article.id,
+          title: article.title,
+          authorId: article.authorId
+        })
+        
+        // Update author's article count
+        await updateAuthorStats(article.authorId)
+        
+        // Generate social media cards
+        await generateSocialCards(article.id)
+      }
+    }
+  })
+
+  return { error, article }
+}
+
+// Publish draft article
+const publishArticle = async (articleId: string) => {
+  const [error, publishedArticle] = await articleService.update(articleId, {
+    status: 'published',
+    publishDate: new Date(),
+    lastModified: new Date()
+  }, {
+    beforeAction: async (article) => {
+      // Validate article is ready for publishing
+      if (!article.title || !article.content || !article.excerpt) {
+        throw new Error('Article missing required fields for publishing')
+      }
+      
+      if (article.content.length < 500) {
+        throw new Error('Article content too short for publishing')
+      }
+    },
+    afterAction: async (article) => {
+      // Clear content cache
+      await cacheService.delete(`article:${article.id}`)
+      
+      // Update search index
+      await searchIndexService.updateDocument('articles', article.id, {
+        title: article.title,
+        content: article.content,
+        tags: article.tags
+      })
+      
+      // Send to social media scheduler
+      await scheduleAnnouncement(article)
+    }
+  })
+
+  return { error, article: publishedArticle }
+}
+```
+
+## Financial Management
+
+### Transaction Processing
+
+```typescript title="Financial Transaction Management"
+import { transactions, accounts, ledgerEntries } from './schema'
+
+const transactionService = drizzleService(db)(transactions)
+const accountService = drizzleService(db)(accounts)
+const ledgerService = drizzleService(db)(ledgerEntries)
+
+// Process a payment transaction
+const processPayment = async (paymentData: {
+  fromAccountId: string
+  toAccountId: string
+  amount: number
+  currency: string
+  description: string
+  reference?: string
+}) => {
+  const [error, transaction] = await transactionService.create({
+    type: 'payment',
+    fromAccountId: paymentData.fromAccountId,
+    toAccountId: paymentData.toAccountId,
+    amount: paymentData.amount,
+    currency: paymentData.currency,
+    description: paymentData.description,
+    reference: paymentData.reference,
+    status: 'pending',
+    processedAt: null,
+    fees: calculateTransactionFees(paymentData.amount),
+    exchangeRate: await getExchangeRate(paymentData.currency)
+  }, {
+    beforeAction: async (data) => {
+      // Validate account balances
+      const fromAccount = await accountService.findById(data.fromAccountId)
+      if (!fromAccount || fromAccount.balance < data.amount) {
+        throw new Error('Insufficient funds')
+      }
+      
+      // Validate account status
+      if (fromAccount.status !== 'active') {
+        throw new Error('Source account is not active')
+      }
+      
+      const toAccount = await accountService.findById(data.toAccountId)
+      if (!toAccount || toAccount.status !== 'active') {
+        throw new Error('Destination account is not active')
+      }
+    },
+    afterAction: async (transaction) => {
+      // Update account balances
+      await accountService.update(transaction.fromAccountId, {
+        balance: sql`balance - ${transaction.amount}`,
+        lastTransactionAt: new Date()
+      })
+      
+      await accountService.update(transaction.toAccountId, {
+        balance: sql`balance + ${transaction.amount}`,
+        lastTransactionAt: new Date()
+      })
+      
+      // Create ledger entries for audit trail
+      await ledgerService.bulkCreate([
+        {
+          accountId: transaction.fromAccountId,
+          transactionId: transaction.id,
+          type: 'debit',
+          amount: transaction.amount,
+          balance: sql`(SELECT balance FROM accounts WHERE id = ${transaction.fromAccountId})`
+        },
+        {
+          accountId: transaction.toAccountId,
+          transactionId: transaction.id,
+          type: 'credit',
+          amount: transaction.amount,
+          balance: sql`(SELECT balance FROM accounts WHERE id = ${transaction.toAccountId})`
+        }
+      ])
+      
+      // Send notifications
+      await notifyTransactionComplete(transaction.id)
+    }
+  })
+
+  if (error) {
+    await logTransactionError(paymentData, error.message)
+    return { success: false, error: error.message }
+  }
+
+  // Update transaction status to completed
+  const [updateError] = await transactionService.update(transaction.id, {
+    status: 'completed',
+    processedAt: new Date()
+  })
+
+  return { 
+    success: !updateError, 
+    transaction, 
+    transactionId: transaction.id 
+  }
+}
+```
+
+## Error Handling and Validation
+
+### Comprehensive Error Handling Patterns
+
+```typescript title="Robust Error Handling for Production Systems"
+// Order processing with comprehensive error handling
+const processOrder = async (orderData: {
+  customerId: string
+  items: Array<{ productId: string; quantity: number; price: number }>
+  shippingAddress: Address
+  paymentMethodId: string
+}) => {
+  const [orderError, order] = await orderService.create({
+    customerId: orderData.customerId,
+    status: 'pending',
+    total: calculateOrderTotal(orderData.items),
+    subtotal: calculateSubtotal(orderData.items),
+    tax: calculateTax(orderData.items),
+    shipping: calculateShipping(orderData.shippingAddress),
+    shippingAddress: orderData.shippingAddress,
+    paymentMethodId: orderData.paymentMethodId,
+    orderDate: new Date()
+  }, {
+    beforeAction: async (data) => {
+      // Validate inventory availability
+      for (const item of orderData.items) {
+        const inventory = await inventoryService.findByField('productId', item.productId)
+        if (!inventory || inventory.quantity < item.quantity) {
+          throw new Error(`Insufficient inventory for product ${item.productId}`)
+        }
+      }
+      
+      // Validate payment method
+      const paymentMethod = await paymentService.validateMethod(data.paymentMethodId)
+      if (!paymentMethod.valid) {
+        throw new Error('Invalid payment method')
+      }
+    },
+    afterAction: async (order) => {
+      // Reserve inventory
+      await reserveInventory(orderData.items, order.id)
+      
+      // Send order confirmation
+      await sendOrderConfirmation(order.customerId, order.id)
+      
+      // Create fulfillment tasks
+      await createFulfillmentTasks(order.id)
+    },
+    onError: async (error) => {
+      // Log error with context
+      await errorLogger.log('ORDER_CREATION_FAILED', {
+        customerId: orderData.customerId,
+        error: error.message,
+        orderData: JSON.stringify(orderData),
+        timestamp: new Date()
+      })
+      
+      // Release any reserved inventory
+      await releaseReservedInventory(orderData.items)
+    }
+  })
+
+  if (orderError) {
+    return {
+      success: false,
+      error: orderError.message,
+      code: getErrorCode(orderError)
+    }
+  }
+
+  return {
+    success: true,
+    order,
+    confirmationNumber: order.id
+  }
+}
+```
+
+## Customer Support System
+
+### Ticket Management
+
+```typescript title="Customer Support Ticket System"
+import { supportTickets, customers, agents } from './schema'
+
+const ticketService = drizzleService(db)(supportTickets, {
+  soft: {
+    field: 'status',
+    deletedValue: 'closed',
+    notDeletedValue: 'open'
+  }
+})
+
+// Create support ticket with automatic assignment
+const createSupportTicket = async (ticketData: {
+  customerId: string
+  subject: string
+  description: string
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  category: string
+  attachments?: string[]
+}) => {
+  const [error, ticket] = await ticketService.create({
+    ticketNumber: generateTicketNumber(),
+    customerId: ticketData.customerId,
+    subject: ticketData.subject,
+    description: ticketData.description,
+    priority: ticketData.priority,
+    category: ticketData.category,
+    status: 'open',
+    assignedAgentId: null,
+    createdAt: new Date(),
+    lastResponseAt: new Date(),
+    attachments: ticketData.attachments || [],
+    escalated: false,
+    customerSatisfactionRating: null
+  }, {
+    afterAction: async (ticket) => {
+      // Auto-assign to available agent based on category and workload
+      const assignedAgent = await autoAssignAgent(ticket.category, ticket.priority)
+      
+      if (assignedAgent) {
+        await ticketService.update(ticket.id, {
+          assignedAgentId: assignedAgent.id,
+          assignedAt: new Date()
+        })
+        
+        // Notify assigned agent
+        await notifyAgent(assignedAgent.id, 'NEW_TICKET_ASSIGNED', {
+          ticketId: ticket.id,
+          ticketNumber: ticket.ticketNumber,
+          priority: ticket.priority
+        })
+      }
+      
+      // Send confirmation to customer
+      await sendTicketConfirmation(ticket.customerId, ticket.ticketNumber)
+      
+      // Create initial activity log
+      await createActivityLog({
+        ticketId: ticket.id,
+        action: 'TICKET_CREATED',
+        performedBy: 'SYSTEM',
+        details: `Ticket created with priority: ${ticket.priority}`
+      })
+    }
+  })
+
+  return { error, ticket }
+}
+
+// Update ticket status with workflow validation
+const updateTicketStatus = async (
+  ticketId: string, 
+  newStatus: 'open' | 'in-progress' | 'waiting-customer' | 'resolved' | 'closed',
+  agentId: string,
+  resolution?: string
+) => {
+  const [error, updatedTicket] = await ticketService.update(ticketId, {
+    status: newStatus,
+    lastResponseAt: new Date(),
+    resolvedAt: newStatus === 'resolved' ? new Date() : null,
+    resolution: resolution || null,
+    lastUpdatedBy: agentId
+  }, {
+    beforeAction: async (ticket) => {
+      // Validate status transition
+      const validTransitions = {
+        'open': ['in-progress', 'waiting-customer'],
+        'in-progress': ['waiting-customer', 'resolved', 'open'],
+        'waiting-customer': ['in-progress', 'resolved'],
+        'resolved': ['closed', 'open'],
+        'closed': ['open']
+      }
+      
+      if (!validTransitions[ticket.status]?.includes(newStatus)) {
+        throw new Error(`Invalid status transition from ${ticket.status} to ${newStatus}`)
+      }
+      
+      // Require resolution for resolved status
+      if (newStatus === 'resolved' && !resolution) {
+        throw new Error('Resolution is required when marking ticket as resolved')
+      }
+    },
+    afterAction: async (ticket) => {
+      // Create activity log
+      await createActivityLog({
+        ticketId: ticket.id,
+        action: 'STATUS_UPDATED',
+        performedBy: agentId,
+        details: `Status changed to: ${newStatus}`,
+        previousValue: ticket.status,
+        newValue: newStatus
+      })
+      
+      // Send notifications based on status
+      if (newStatus === 'resolved') {
+        await notifyCustomer(ticket.customerId, 'TICKET_RESOLVED', {
+          ticketNumber: ticket.ticketNumber,
+          resolution: ticket.resolution
+        })
+      } else if (newStatus === 'waiting-customer') {
+        await notifyCustomer(ticket.customerId, 'RESPONSE_REQUIRED', {
+          ticketNumber: ticket.ticketNumber
+        })
+      }
+      
+      // Update agent statistics
+      await updateAgentStats(agentId, newStatus)
+    }
+  })
+
+  return { error, ticket: updatedTicket }
+}
+```

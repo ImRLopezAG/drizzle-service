@@ -1,0 +1,230 @@
+---
+title: API Reference
+description: Complete API reference for all bulk operations including method signatures, parameters, and return types
+---
+
+import { TypeTable } from 'fumadocs-ui/components/type-table'
+
+
+## bulkCreate()
+
+Create multiple records efficiently in a single database transaction.
+
+```ts
+bulkCreate(
+  data: T['$inferInsert'][],
+  hooks?: ServiceHooks<T>
+): Handler<T['$inferSelect'][]>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    data: {
+      description: 'Array of objects containing data for new records',
+      type: 'T[\'$inferInsert\'][]',
+      required: true
+    },
+    hooks: {
+      description: 'Optional service hooks for lifecycle events',
+      type: 'ServiceHooks<T>',
+    }
+  }}
+/>
+
+### Returns
+
+Returns a `Handler<T['$inferSelect'][]>` which is a promise that resolves to:
+- `[null, records[]]` - Success case with array of created records
+- `[error, null]` - Error case with detailed error information
+
+---
+
+## bulkUpdate()
+
+Update multiple records with individual change sets in a single transaction.
+
+```ts
+bulkUpdate(
+  data: Array<{
+    id: IdType<T, TOpts>;
+    changes: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>;
+  }>,
+  hooks?: ServiceHooks<T>
+): Handler<T['$inferSelect'][]>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    data: {
+      description: 'Array of update objects containing ID and changes for each record',
+      type: 'Array<{ id: IdType<T, TOpts>; changes: Partial<Omit<T[\'$inferInsert\'], \'createdAt\' | \'id\'>>; }>',
+      required: true
+    },
+    hooks: {
+      description: 'Optional service hooks for lifecycle events',
+      type: 'ServiceHooks<T>',
+    }
+  }}
+/>
+
+### Returns
+
+Returns a `Handler<T['$inferSelect'][]>` which is a promise that resolves to:
+- `[null, records[]]` - Success case with array of updated records
+- `[error, null]` - Error case with detailed error information
+
+---
+
+## bulkDelete()
+
+Delete multiple records by their primary keys, respecting soft delete configuration.
+
+```ts
+bulkDelete(
+  ids: IdType<T, TOpts>[],
+  hooks?: ServiceHooks<T>
+): Promise<{ readonly success: boolean; readonly message?: string }>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    ids: {
+      description: 'Array of primary key values for records to delete',
+      type: 'IdType<T, TOpts>[]',
+      required: true
+    },
+    hooks: {
+      description: 'Optional service hooks for lifecycle events',
+      type: 'ServiceHooks<T>',
+    }
+  }}
+/>
+
+### Returns
+
+Returns a promise that resolves to a result object:
+
+<TypeTable
+  type={{
+    success: {
+      description: 'Whether the bulk delete operation completed successfully',
+      type: 'boolean',
+      required: true
+    },
+    message: {
+      description: 'Optional human-readable description of the operation result',
+      type: 'string',
+    }
+  }}
+/>
+
+### Behavior
+
+- **With Soft Delete**: Updates the configured soft delete field for all specified records
+- **Without Soft Delete**: Permanently removes all specified records from the database
+
+---
+
+## bulkHardDelete()
+
+Permanently delete multiple records from the database, bypassing soft delete configuration.
+
+```ts
+bulkHardDelete(
+  ids: IdType<T, TOpts>[],
+  hooks?: ServiceHooks<T>
+): Promise<{ readonly success: boolean; readonly message?: string }>
+```
+
+### Parameters
+
+<TypeTable
+  type={{
+    ids: {
+      description: 'Array of primary key values for records to permanently delete',
+      type: 'IdType<T, TOpts>[]',
+      required: true
+    },
+    hooks: {
+      description: 'Optional service hooks for lifecycle events',
+      type: 'ServiceHooks<T>',
+    }
+  }}
+/>
+
+### Returns
+
+Returns a promise that resolves to a result object:
+
+<TypeTable
+  type={{
+    success: {
+      description: 'Whether the bulk hard delete operation completed successfully',
+      type: 'boolean',
+      required: true
+    },
+    message: {
+      description: 'Optional human-readable description of the operation result',
+      type: 'string',
+    }
+  }}
+/>
+
+### Behavior
+
+Always performs permanent deletion regardless of soft delete configuration.
+
+## Type Definitions
+
+### Handler
+
+<TypeTable
+  type={{
+    '[0]': {
+      description: 'Error object if operation failed, null if successful',
+      type: 'Error | null',
+      required: true
+    },
+    '[1]': {
+      description: 'Result data if operation succeeded, null if failed',
+      type: 'T | null',
+      required: true
+    }
+  }}
+/>
+
+### ServiceHooks
+
+<TypeTable
+  type={{
+    beforeAction: {
+      description: 'Called before the action is performed',
+      type: '(data: T[\'$inferSelect\']) => Promise<void>',
+    },
+    afterAction: {
+      description: 'Called after the action is successfully completed',
+      type: '(data: T[\'$inferSelect\']) => Promise<void>',
+    },
+    onError: {
+      description: 'Called when an error occurs during the action',
+      type: '(error: Error) => Promise<void>',
+    }
+  }}
+/>
+
+### IdType
+
+<TypeTable
+  type={{
+    type: {
+      description: 'The type of the primary key field, inferred from the table schema or service options',
+      type: 'string | number | bigint',
+    }
+  }}
+/>

@@ -25,7 +25,6 @@ A powerful, type-safe service layer library for [Drizzle ORM](https://orm.drizzl
 - 🏢 **Multi-Tenant**: Workspace-based filtering for multi-tenant applications
 - 🔧 **Extensible**: Override and extend default service methods
 - 🎯 **Error Handling**: Consistent error handling with success/error patterns
-- 🚀 **Performance**: Optimized queries with caching support
 
 ## 📦 Installation
 
@@ -350,12 +349,6 @@ interface ServiceOptions<T extends BaseEntity> {
     field: keyof T['$inferSelect']     // Field to mark as deleted
     deletedValue: T['$inferSelect'][keyof T['$inferSelect']]      // Value indicating deleted state
     notDeletedValue?: T['$inferSelect'][keyof T['$inferSelect']]  // Value indicating active state
-  }
-  caching?: {               // Optional caching configuration
-    get?: <K, V>(key: K) => V | null
-    set?: <K, V>(key: K, value: V, ttl?: number) => void
-    clear?: () => void
-    delete?: <K>(key: K) => void
   }
   override?: (baseMethods: ServiceMethods<T>) => Partial<ServiceMethods<T>>
 }

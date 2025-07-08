@@ -1,0 +1,282 @@
+---
+title: API Reference
+description: Complete API reference for mutation operations including create, update, delete, and restore methods
+---
+
+import { TypeTable } from 'fumadocs-ui/components/type-table'
+
+
+## create()
+
+Creates a new entity in the database.
+
+### Parameters
+
+<TypeTable
+  type={{
+    data: {
+      description: "The data to insert, conforming to the entity's insert schema",
+      type: "T['$inferInsert']",
+      required: true
+    },
+    hooks: {
+      description: "Optional service hooks to execute during creation",
+      type: "ServiceHooks<T>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns a `Handler<T['$inferSelect']>` - a promise that resolves to a tuple `[Error | null, T['$inferSelect'] | null]`.
+
+### Example
+
+```typescript
+const [error, todo] = await todosService.create({
+  title: 'Complete documentation',
+  userId: 'user-123',
+  tenant: 'company-abc',
+  status: 'todo',
+  priority: 'high'
+})
+
+if (error) {
+  console.error('Creation failed:', error.message)
+} else {
+  console.log('Created todo:', todo.id)
+  console.log('Todo title:', todo.title)
+  console.log('Status:', todo.status) // Default: 'todo'
+  console.log('Priority:', todo.priority) // Default: 'medium'
+}
+```
+
+## update()
+
+Updates an existing entity in the database.
+
+### Parameters
+
+<TypeTable
+  type={{
+    id: {
+      description: "The identifier of the entity to update",
+      type: "IdType<T, TOpts>",
+      required: true
+    },
+    data: {
+      description: "Partial data to update, excluding createdAt and id fields",
+      type: "Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>",
+      required: true
+    },
+    hooks: {
+      description: "Optional service hooks to execute during update",
+      type: "ServiceHooks<T>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns a `Handler<T['$inferSelect']>` - a promise that resolves to a tuple `[Error | null, T['$inferSelect'] | null]`.
+
+### Example
+
+```typescript
+const [error, updatedTodo] = await todosService.update(todoId, {
+  title: 'Updated task title',
+  status: 'in-progress',
+  priority: 'low'
+})
+
+if (error) {
+  console.error('Update failed:', error.message)
+} else {
+  console.log('Updated todo:', updatedTodo.title)
+  console.log('New status:', updatedTodo.status)
+}
+```
+
+## delete()
+
+Performs a soft delete on an entity (marks as deleted without removing from database).
+
+### Parameters
+
+<TypeTable
+  type={{
+    id: {
+      description: "The identifier of the entity to soft delete",
+      type: "IdType<T, TOpts>",
+      required: true
+    },
+    hooks: {
+      description: "Optional service hooks to execute during deletion",
+      type: "ServiceHooks<T>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns a promise that resolves to an object with success status and optional message:
+
+```typescript
+Promise<{ readonly success: boolean; readonly message?: string }>
+```
+
+### Example
+
+```typescript
+const { success, message } = await todosService.delete(todoId)
+
+if (success) {
+  console.log('Todo soft deleted:', message)
+  // Contains: 'successfully soft deleted'
+  
+  // Verify the record is soft deleted but still exists
+  const deleted = await todosService.findById(todoId)
+  console.log('Status after delete:', deleted?.status) // 'canceled'
+} else {
+  console.error('Delete failed')
+}
+```
+
+## hardDelete()
+
+Performs a hard delete on an entity (permanently removes from database).
+
+### Parameters
+
+<TypeTable
+  type={{
+    id: {
+      description: "The identifier of the entity to permanently delete",
+      type: "IdType<T, TOpts>",
+      required: true
+    },
+    hooks: {
+      description: "Optional service hooks to execute during hard deletion",
+      type: "ServiceHooks<T>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns a promise that resolves to an object with success status and optional message:
+
+```typescript
+Promise<{ readonly success: boolean; readonly message?: string }>
+```
+
+### Example
+
+```typescript
+const { success, message } = await todosService.hardDelete(todoId)
+
+if (success) {
+  console.log('Todo permanently deleted:', message)
+  
+  // Verify the record is completely removed
+  const deleted = await todosService.findById(todoId)
+  console.log('Record exists:', deleted) // null
+} else {
+  console.error('Hard delete failed')
+}
+```
+
+## restore()
+
+Performs a restore operation on a soft-deleted entity (marks as not deleted).
+
+### Parameters
+
+<TypeTable
+  type={{
+    id: {
+      description: "The identifier of the entity to restore",
+      type: "IdType<T, TOpts>",
+      required: true
+    },
+    hooks: {
+      description: "Optional service hooks to execute during restoration",
+      type: "ServiceHooks<T>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns a promise that resolves to an object with success status and optional message:
+
+```typescript
+Promise<{ readonly success: boolean; readonly message?: string }>
+```
+
+### Example
+
+```typescript
+// First delete a todo
+await todosService.delete(todoId)
+
+// Then restore it
+const restoreResult = await todosService.restore(todoId)
+
+if (restoreResult.success) {
+  console.log('Todo restored:', restoreResult.message)
+  
+  // Verify restoration
+  const restored = await todosService.findById(todoId)
+  console.log('Status after restore:', restored?.status) // Back to original status
+} else {
+  console.error('Restore failed')
+}
+```
+
+## ServiceHooks&lt;T&gt;
+
+Interface for lifecycle hooks that can be executed during mutation operations.
+
+<TypeTable
+  type={{
+    beforeAction: {
+      description: "Optional hook executed before the mutation operation",
+      type: "(data: T['$inferSelect']) => Promise<void>",
+      required: false
+    },
+    afterAction: {
+      description: "Optional hook executed after the mutation operation",
+      type: "(data: T['$inferSelect']) => Promise<void>",
+      required: false
+    },
+    onError: {
+      description: "Optional hook executed when an error occurs",
+      type: "(error: Error) => Promise<void>",
+      required: false
+    }
+  }}
+/>
+
+### Hook Example
+
+```typescript
+const hooks = {
+  beforeAction: async (data) => {
+    console.log('About to create:', data)
+  },
+  afterAction: async (data) => {
+    console.log('Created successfully:', data.id)
+  },
+  onError: async (error) => {
+    console.error('Operation failed:', error.message)
+  }
+}
+
+const [error, todo] = await todosService.create(todoData, hooks)
+```

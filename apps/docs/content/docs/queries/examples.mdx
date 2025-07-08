@@ -1,666 +1,523 @@
 ---
-title: Examples
-description: Real-world examples and use cases for query operations in Drizzle Service.
+title: Query Operations Examples
+description: Real-world examples demonstrating query operations for data retrieval, filtering, and analytics
 ---
 
-import { Banner } from 'fumadocs-ui/components/banner'
-import { Callout } from 'fumadocs-ui/components/callout'
-import { Step, Steps } from 'fumadocs-ui/components/steps'
-import { Tab, Tabs } from 'fumadocs-ui/components/tabs'
 
-# Query Examples
+## E-commerce Product Catalog
 
-Real-world examples demonstrating how to use Drizzle Service query operations effectively in different scenarios.
+### Product Discovery and Search
 
-## E-commerce Platform
+```typescript title="Product Catalog with Advanced Filtering"
+import { drizzleService } from 'drizzle-service/pg'
+import { products, categories, reviews, db } from './schema'
 
-### Product Catalog with Filtering
+// Initialize the service with database instance
+const service = drizzleService(db) // [!code highlight]
 
-Search products with multiple filters, categories, and pagination.
-
-```typescript title="Product Search Service"
-import { and, or, eq, gt, like, between } from 'drizzle-orm'
-
-async function searchProducts(searchParams: ProductSearchParams) {
-  const { category, priceRange, search, page = 1, sortBy = 'relevance' } = searchParams
-  
-  // Build dynamic conditions
-  const conditions = [
-    eq(products.status, 'active'), // [!code highlight]
-    eq(products.isVisible, true) // [!code highlight]
-  ]
-  
-  if (category) {
-    conditions.push(eq(products.categoryId, category)) // [!code highlight]
+// Product service with soft delete for discontinued items
+const productService = service(products, { // [!code highlight]
+  defaultLimit: 50,
+  maxLimit: 200,
+  soft: {
+    field: 'status', // [!code word:status]
+    deletedValue: 'discontinued',
+    notDeletedValue: 'active'
   }
-  
-  if (priceRange) {
-    conditions.push(
-      between(products.price, priceRange.min, priceRange.max) // [!code highlight]
-    )
-  }
-  
-  if (search) {
-    conditions.push(
-      or( // [!code highlight]
-        like(products.name, `%${search}%`), // [!code highlight]
-        like(products.description, `%${search}%`), // [!code highlight]
-        like(products.tags, `%${search}%`) // [!code highlight]
-      ) // [!code highlight]
-    )
-  }
-  
-  const orderBy = getOrderByClause(sortBy) // [!code highlight]
-  
-  return await productService.findAll({
-    custom: and(...conditions), // [!code highlight]
-    relations: [
-      {
-        table: categories,
-        type: 'inner',
-        sql: eq(products.categoryId, categories.id)
-      },
-      {
-        table: productImages,
-        type: 'left',
-        sql: and(
-          eq(products.id, productImages.productId),
-          eq(productImages.isPrimary, true)
-        )
-      }
-    ],
-    orderBy,
-    page,
-    limit: 24,
-    parse: (data) => data.map(row => ({ // [!code highlight]
-      ...row.products, // [!code highlight]
-      category: row.categories, // [!code highlight]
-      primaryImage: row.productImages // [!code highlight]
-    })) // [!code highlight]
-  })
-}
+})
 
-function getOrderByClause(sortBy: string) { // [!code highlight]
-  switch (sortBy) { // [!code highlight]
-    case 'price_low': return { price: 'asc' as const } // [!code highlight]
-    case 'price_high': return { price: 'desc' as const } // [!code highlight]
-    case 'newest': return { createdAt: 'desc' as const } // [!code highlight]
-    case 'rating': return { averageRating: 'desc' as const } // [!code highlight]
-    default: return { featured: 'desc' as const, createdAt: 'desc' as const } // [!code highlight]
-  } // [!code highlight]
-} // [!code highlight]
+// Get all active products with pagination
+const activeProducts = await productService.findAll({ // [!code focus]
+  orderBy: { updatedAt: 'desc' },
+  limit: 20
+}) // [!code focus]
+
+console.log(`Found ${activeProducts.length} active products`)
+
+// Search products by multiple criteria
+const featuredElectronics = await productService.findBy({
+  categoryId: 'electronics',
+  featured: true, // [!code highlight]
+  inStock: true, // [!code highlight]
+  price: { gte: 50, lte: 500 }
+})
+
+// Get products by specific SKU pattern
+const bluetoothProducts = await productService.findBy({
+  name: { ilike: '%bluetooth%' } // [!code word:ilike]
+})
+
+// Find products in multiple categories
+const techProducts = await productService.findBy({
+  categoryId: { in: ['electronics', 'computers', 'mobile'] } // [!code highlight]
+})
 ```
 
-### Customer Order History
+### Product Details and Relations
 
-Retrieve customer orders with related data and pagination.
+```typescript title="Retrieving Product Details with Relations"
+// Get single product by ID
+const product = await productService.findById('prod-123') // [!code highlight]
 
-```typescript title="Order History Service"
-async function getCustomerOrderHistory(customerId: number, page = 1) {
-  return await orderService.findBy(
-    { customerId }, // [!code highlight]
-    {
-      relations: [
-        {
-          table: orderItems,
-          type: 'left',
-          sql: eq(orders.id, orderItems.orderId)
-        },
-        {
-          table: products,
-          type: 'left',
-          sql: eq(orderItems.productId, products.id)
-        },
-        {
-          table: shippingAddresses,
-          type: 'left',
-          sql: eq(orders.shippingAddressId, shippingAddresses.id)
-        }
-      ],
-      orderBy: { createdAt: 'desc' }, // [!code highlight]
-      page,
-      limit: 10,
-      parse: (data) => { // [!code highlight]
-        const ordersMap = new Map() // [!code highlight]
-        
-        data.forEach(row => { // [!code highlight]
-          const orderId = row.orders.id // [!code highlight]
-          
-          if (!ordersMap.has(orderId)) { // [!code highlight]
-            ordersMap.set(orderId, { // [!code highlight]
-              ...row.orders, // [!code highlight]
-              items: [], // [!code highlight]
-              shippingAddress: row.shippingAddresses // [!code highlight]
-            }) // [!code highlight]
-          } // [!code highlight]
-          
-          const order = ordersMap.get(orderId) // [!code highlight]
-          if (row.orderItems && row.products) { // [!code highlight]
-            order.items.push({ // [!code highlight]
-              ...row.orderItems, // [!code highlight]
-              product: row.products // [!code highlight]
-            }) // [!code highlight]
-          } // [!code highlight]
-        }) // [!code highlight]
-        
-        return Array.from(ordersMap.values()) // [!code highlight]
-      } // [!code highlight]
-    }
-  )
+if (product) {
+  console.log(`Product: ${product.name} - $${product.price}`)
+} else {
+  console.log('Product not found')
 }
+
+// Get product by unique SKU
+const productBySku = await productService.findByField('sku', 'WBH-001') // [!code word:findByField]
+
+// Get products by brand with sorting
+const appleProducts = await productService.findBy(
+  { brand: 'Apple' },
+  {
+    orderBy: { price: 'asc' }, // [!code highlight]
+    limit: 10
+  }
+)
+
+// Advanced filtering with multiple conditions
+const premiumProductsInStock = await productService.findBy({
+  price: { gte: 1000 }, // [!code focus]
+  inStock: true, // [!code focus]
+  rating: { gte: 4.5 }, // [!code focus]
+  categoryId: { in: ['electronics', 'computers'] } // [!code focus]
+})
 ```
 
-### Inventory Management
+## User Management and Analytics
 
-Check product availability and low stock alerts.
+### User Activity Tracking
 
-```typescript title="Inventory Service"
-async function getLowStockProducts(threshold = 10) {
-  return await productService.findAll({
-    custom: and( // [!code highlight]
-      eq(products.trackInventory, true), // [!code highlight]
-      gt(products.stock, 0), // [!code highlight]
-      gt(threshold, products.stock) // [!code highlight]
-    ), // [!code highlight]
-    relations: [{
-      table: categories,
-      type: 'inner',
-      sql: eq(products.categoryId, categories.id)
-    }],
-    orderBy: { stock: 'asc' }, // [!code highlight]
-    parse: (data) => data.map(row => ({
-      ...row.products,
-      category: row.categories,
-      stockStatus: getStockStatus(row.products.stock, threshold) // [!code highlight]
-    }))
-  })
-}
+```typescript title="User Management and Activity Analytics"
+import { users, userSessions, userPreferences, db } from './schema'
 
-function getStockStatus(stock: number, threshold: number) { // [!code highlight]
-  if (stock === 0) return 'out_of_stock' // [!code highlight]
-  if (stock <= threshold * 0.5) return 'critical' // [!code highlight]
-  if (stock <= threshold) return 'low' // [!code highlight]
-  return 'in_stock' // [!code highlight]
-} // [!code highlight]
+// Initialize the service
+const service = drizzleService(db) // [!code highlight]
+
+// User service with soft delete for deactivated accounts
+const userService = service(users, { // [!code highlight]
+  soft: {
+    field: 'status', // [!code word:status]
+    deletedValue: 'deactivated',
+    notDeletedValue: 'active'
+  }
+})
+
+const sessionService = service(userSessions) // [!code highlight]
+
+// Get all active users
+const activeUsers = await userService.findAll({
+  orderBy: { lastLoginAt: 'desc' } // [!code highlight]
+})
+
+// Find users by role and department
+const engineeringManagers = await userService.findBy({
+  role: 'manager', // [!code focus]
+  department: 'engineering', // [!code focus]
+  status: 'active' // [!code focus]
+})
+
+// Get recently registered users (last 7 days)
+const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+const newUsers = await userService.findBy({
+  createdAt: { gte: weekAgo } // [!code highlight]
+})
+
+// Find users by email domain
+const companyUsers = await userService.findBy({
+  email: { ilike: '%@company.com' } // [!code word:ilike]
+})
+
+// Get users with specific permissions
+const adminUsers = await userService.findBy({
+  permissions: { contains: ['admin', 'user_management'] } // [!code highlight]
+})
+```
+
+### User Search and Filtering
+
+```typescript title="Advanced User Search and Filtering"
+// Search users by partial name or email
+const searchResults = await userService.findBy({
+  or: [ // [!code highlight]
+    { name: { ilike: '%john%' } }, // [!code highlight]
+    { email: { ilike: '%john%' } } // [!code highlight]
+  ] // [!code highlight]
+})
+
+// Get users by multiple criteria
+const seniorDevelopers = await userService.findBy({
+  role: { in: ['senior_developer', 'lead_developer'] }, // [!code word:in]
+  experience: { gte: 5 }, // [!code word:gte]
+  status: 'active'
+})
+
+// Find inactive users for cleanup
+const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+const inactiveUsers = await userService.findBy({
+  lastLoginAt: { lt: threeMonthsAgo }, // [!code focus]
+  status: 'active' // [!code focus]
+})
+
+// Get users by location and preferences
+const remoteUsers = await userService.findBy({
+  workLocation: 'remote', // [!code highlight]
+  timezone: { in: ['UTC-8', 'UTC-7', 'UTC-6'] } // [!code highlight]
+})
 ```
 
 ## Content Management System
 
-### Blog Post Listing with Authors
+### Article and Content Queries
 
-Retrieve published blog posts with author information and metadata.
+```typescript title="Content Management and Publishing"
+import { articles, authors, categories } from './schema'
 
-```typescript title="Blog Service"
-async function getPublishedPosts(options: BlogListOptions = {}) {
-  const { category, author, tag, featured, page = 1 } = options
+// Article service with soft delete for draft/published states
+const articleService = drizzleService(db)(articles, {
+  soft: {
+    field: 'status',
+    deletedValue: 'archived',
+    notDeletedValue: 'published'
+  }
+})
+
+const authorService = drizzleService(db)(authors)
+
+// Get published articles with pagination
+const publishedArticles = await articleService.findAll({
+  orderBy: { publishedAt: 'desc' },
+  limit: 20
+})
+
+// Get featured articles for homepage
+const featuredArticles = await articleService.findBy({
+  featured: true,
+  status: 'published'
+}, {
+  orderBy: { publishedAt: 'desc' },
+  limit: 5
+})
+
+// Search articles by category and tags
+const techArticles = await articleService.findBy({
+  categoryId: 'technology',
+  tags: { contains: ['javascript', 'typescript'] }
+})
+
+// Get articles by specific author
+const authorArticles = await articleService.findByField(
+  'authorId',
+  'author-123'
+)
+
+// Get recent articles (last 30 days)
+const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+const recentArticles = await articleService.findBy({
+  publishedAt: { gte: thirtyDaysAgo }
+})
+```
+
+### Content Analytics and Metrics
+
+```typescript title="Content Performance Analytics"
+// Get most viewed articles
+const popularArticles = await articleService.findBy({
+  viewCount: { gte: 1000 }
+}, {
+  orderBy: { viewCount: 'desc' },
+  limit: 10
+})
+
+// Get articles with high engagement
+const engagingArticles = await articleService.findBy({
+  commentCount: { gte: 10 },
+  likeCount: { gte: 50 }
+})
+
+// Find articles needing review (old unpublished drafts)
+const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)
+const staleDrafts = await articleService.findBy({
+  status: 'draft',
+  updatedAt: { lt: sixMonthsAgo }
+})
+
+// Get articles by reading time for content planning
+const quickReads = await articleService.findBy({
+  readingTimeMinutes: { lte: 5 }
+})
+
+const longFormContent = await articleService.findBy({
+  readingTimeMinutes: { gte: 15 }
+})
+```
+
+## Financial and Order Management
+
+### Order Processing and Analytics
+
+```typescript title="Order Management and Financial Analytics"
+import { orders, orderItems, customers } from './schema'
+
+// Order service with soft delete for canceled orders
+const orderService = drizzleService(db)(orders, {
+  soft: {
+    field: 'status',
+    deletedValue: 'canceled',
+    notDeletedValue: 'active'
+  }
+})
+
+// Get recent orders
+const recentOrders = await orderService.findAll({
+  orderBy: { createdAt: 'desc' },
+  limit: 50
+})
+
+// Get high-value orders
+const highValueOrders = await orderService.findBy({
+  total: { gte: 1000 },
+  status: { in: ['pending', 'processing', 'shipped'] }
+})
+
+// Get orders by date range
+const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+const monthlyOrders = await orderService.findBy({
+  createdAt: { gte: startOfMonth }
+})
+
+// Get orders by payment method
+const creditCardOrders = await orderService.findBy({
+  paymentMethod: 'credit_card',
+  paymentStatus: 'confirmed'
+})
+
+// Find orders needing fulfillment
+const pendingOrders = await orderService.findBy({
+  status: 'pending',
+  paymentStatus: 'confirmed'
+})
+```
+
+### Customer Order History
+
+```typescript title="Customer Order History and Behavior"
+// Get orders for specific customer
+const customerOrders = await orderService.findByField(
+  'customerId',
+  'customer-456'
+)
+
+// Get repeat customers (multiple orders)
+async function getRepeatCustomers() {
+  // This would typically involve a more complex query with grouping
+  // For demonstration, we'll show the basic pattern
+  const allOrders = await orderService.findAll()
   
-  const conditions = [
-    eq(posts.status, 'published'), // [!code highlight]
-    gt(posts.publishedAt, new Date(0)) // [!code highlight]
+  const customerOrderCounts = allOrders.reduce((acc, order) => {
+    acc[order.customerId] = (acc[order.customerId] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+  
+  const repeatCustomers = Object.entries(customerOrderCounts)
+    .filter(([, count]) => count > 1)
+    .map(([customerId]) => customerId)
+  
+  return repeatCustomers
+}
+
+// Get orders by shipping location
+const californiaOrders = await orderService.findBy({
+  shippingState: 'CA'
+})
+
+// Get urgent orders (express shipping)
+const expressOrders = await orderService.findBy({
+  shippingMethod: 'express',
+  status: { in: ['pending', 'processing'] }
+})
+```
+
+## Support and Ticketing System
+
+### Ticket Management
+
+```typescript title="Support Ticket Management"
+import { supportTickets, agents, customers } from './schema'
+
+// Support ticket service with priority handling
+const ticketService = drizzleService(db)(supportTickets, {
+  soft: {
+    field: 'status',
+    deletedValue: 'closed',
+    notDeletedValue: 'open'
+  }
+})
+
+// Get open tickets by priority
+const criticalTickets = await ticketService.findBy({
+  priority: 'critical',
+  status: { in: ['open', 'in_progress'] }
+}, {
+  orderBy: { createdAt: 'asc' } // Oldest first for critical issues
+})
+
+// Get tickets assigned to specific agent
+const agentTickets = await ticketService.findByField(
+  'assignedAgentId',
+  'agent-123'
+)
+
+// Get unassigned tickets
+const unassignedTickets = await ticketService.findBy({
+  assignedAgentId: null,
+  status: 'open'
+})
+
+// Get overdue tickets
+const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+const overdueTickets = await ticketService.findBy({
+  createdAt: { lt: twoDaysAgo },
+  status: { in: ['open', 'in_progress'] }
+})
+
+// Get tickets by category
+const technicalIssues = await ticketService.findBy({
+  category: 'technical',
+  status: { in: ['open', 'in_progress'] }
+})
+```
+
+### Performance Monitoring Queries
+
+```typescript title="System Performance and Monitoring"
+import { systemLogs, performanceMetrics, errorLogs } from './schema'
+
+const logService = drizzleService(db)(systemLogs)
+const metricsService = drizzleService(db)(performanceMetrics)
+const errorService = drizzleService(db)(errorLogs)
+
+// Get recent system errors
+const recentErrors = await errorService.findBy({
+  createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, // Last hour
+  severity: { in: ['error', 'critical'] }
+}, {
+  orderBy: { createdAt: 'desc' }
+})
+
+// Get performance metrics for monitoring
+const slowQueries = await metricsService.findBy({
+  metricType: 'query_duration',
+  value: { gte: 1000 } // Over 1 second
+})
+
+// Get system logs by service
+const apiLogs = await logService.findBy({
+  service: 'api',
+  level: { in: ['warn', 'error'] }
+}, {
+  orderBy: { timestamp: 'desc' },
+  limit: 100
+})
+```
+
+## Advanced Query Patterns
+
+### Complex Filtering and Sorting
+
+```typescript title="Advanced Query Patterns and Optimization"
+// Complex multi-field sorting
+const sortedProducts = await productService.findAll({
+  orderBy: [
+    { featured: 'desc' },
+    { rating: 'desc' }, 
+    { price: 'asc' },
+    { name: 'asc' }
+  ],
+  limit: 50
+})
+
+// Range queries with multiple conditions
+const midRangeProducts = await productService.findBy({
+  price: { gte: 100, lte: 500 },
+  rating: { gte: 3.5 },
+  inStock: true,
+  categoryId: { in: ['electronics', 'accessories'] }
+})
+
+// Text search patterns
+const searchQuery = 'wireless bluetooth'
+const searchResults = await productService.findBy({
+  or: [
+    { name: { ilike: `%${searchQuery}%` } },
+    { description: { ilike: `%${searchQuery}%` } },
+    { tags: { contains: searchQuery.split(' ') } }
   ]
+})
+
+// Date-based queries for analytics
+const lastQuarter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+const quarterlyOrders = await orderService.findBy({
+  createdAt: { gte: lastQuarter },
+  status: { ne: 'canceled' }
+}, {
+  orderBy: { total: 'desc' }
+})
+```
+
+### Pagination and Performance
+
+```typescript title="Efficient Pagination and Performance Optimization"
+// Cursor-based pagination for large datasets
+async function getPaginatedProducts(cursor?: string, limit = 20) {
+  const conditions: any = { status: 'active' }
   
-  if (category) {
-    conditions.push(eq(posts.categoryId, category)) // [!code highlight]
+  if (cursor) {
+    conditions.id = { gt: cursor }
   }
   
-  if (author) {
-    conditions.push(eq(posts.authorId, author)) // [!code highlight]
-  }
+  const products = await productService.findBy(conditions, {
+    orderBy: { id: 'asc' },
+    limit: limit + 1 // Get one extra to check if there are more
+  })
   
-  if (tag) {
-    conditions.push(like(posts.tags, `%${tag}%`)) // [!code highlight]
-  }
+  const hasMore = products.length > limit
+  const items = hasMore ? products.slice(0, -1) : products
+  const nextCursor = hasMore ? items[items.length - 1].id : null
   
-  if (featured !== undefined) {
-    conditions.push(eq(posts.isFeatured, featured)) // [!code highlight]
+  return {
+    items,
+    nextCursor,
+    hasMore
   }
+}
+
+// Offset-based pagination for smaller datasets
+async function getProductPage(page = 1, pageSize = 20) {
+  const offset = (page - 1) * pageSize
   
-  return await postService.findAll({
-    custom: and(...conditions), // [!code highlight]
-    relations: [
-      {
-        table: users,
-        type: 'inner',
-        sql: eq(posts.authorId, users.id)
-      },
-      {
-        table: categories,
-        type: 'left',
-        sql: eq(posts.categoryId, categories.id)
-      }
-    ],
-    orderBy: { publishedAt: 'desc' }, // [!code highlight]
+  const products = await productService.findAll({
+    orderBy: { createdAt: 'desc' },
+    limit: pageSize,
+    offset
+  })
+  
+  return {
+    items: products,
     page,
-    limit: 12,
-    parse: (data) => data.map(row => ({ // [!code highlight]
-      ...row.posts, // [!code highlight]
-      author: { // [!code highlight]
-        id: row.users.id, // [!code highlight]
-        name: row.users.name, // [!code highlight]
-        avatar: row.users.avatar, // [!code highlight]
-        bio: row.users.bio // [!code highlight]
-      }, // [!code highlight]
-      category: row.categories // [!code highlight]
-    })) // [!code highlight]
-  })
-}
-```
-
-### Comment Moderation Queue
-
-Find comments pending moderation with context.
-
-```typescript title="Comment Moderation Service"
-async function getModerationQueue(status: 'pending' | 'flagged' = 'pending') {
-  return await commentService.findBy(
-    { status }, // [!code highlight]
-    {
-      relations: [
-        {
-          table: posts,
-          type: 'inner',
-          sql: eq(comments.postId, posts.id)
-        },
-        {
-          table: users,
-          type: 'left',
-          sql: eq(comments.authorId, users.id)
-        }
-      ],
-      orderBy: { createdAt: 'asc' }, // Oldest first for FIFO processing
-      parse: (data) => data.map(row => ({ // [!code highlight]
-        ...row.comments, // [!code highlight]
-        post: { // [!code highlight]
-          id: row.posts.id, // [!code highlight]
-          title: row.posts.title, // [!code highlight]
-          slug: row.posts.slug // [!code highlight]
-        }, // [!code highlight]
-        author: row.users ? { // [!code highlight]
-          id: row.users.id, // [!code highlight]
-          name: row.users.name, // [!code highlight]
-          email: row.users.email // [!code highlight]
-        } : null // [!code highlight]
-      })) // [!code highlight]
-    }
-  )
-}
-```
-
-### SEO Analytics Dashboard
-
-Analyze content performance and SEO metrics.
-
-```typescript title="SEO Analytics Service"
-async function getContentAnalytics(dateRange: DateRange) {
-  // Get top performing posts by views
-  const topPosts = await postService.findAll({
-    custom: and( // [!code highlight]
-      eq(posts.status, 'published'), // [!code highlight]
-      between(posts.publishedAt, dateRange.start, dateRange.end) // [!code highlight]
-    ), // [!code highlight]
-    orderBy: { viewCount: 'desc' }, // [!code highlight]
-    limit: 10,
-    relations: [{
-      table: users,
-      type: 'inner',
-      sql: eq(posts.authorId, users.id)
-    }],
-    parse: (data) => data.map(row => ({ // [!code highlight]
-      ...row.posts, // [!code highlight]
-      author: row.users.name, // [!code highlight]
-      engagementRate: calculateEngagementRate(row.posts) // [!code highlight]
-    })) // [!code highlight]
-  })
-  
-  // Get posts needing SEO attention
-  const seoIssues = await postService.findAll({
-    custom: and( // [!code highlight]
-      eq(posts.status, 'published'), // [!code highlight]
-      or( // [!code highlight]
-        eq(posts.metaDescription, ''), // [!code highlight]
-        eq(posts.focusKeyword, ''), // [!code highlight]
-        gt(sql`LENGTH(${posts.title})`, 60) // [!code highlight]
-      ) // [!code highlight]
-    ), // [!code highlight]
-    orderBy: { viewCount: 'desc' }
-  })
-  
-  return { topPosts, seoIssues }
-}
-
-function calculateEngagementRate(post: any) { // [!code highlight]
-  const { viewCount, commentCount, shareCount } = post // [!code highlight]
-  return viewCount > 0 ? (commentCount + shareCount) / viewCount : 0 // [!code highlight]
-} // [!code highlight]
-```
-
-## User Management & Analytics
-
-### User Activity Dashboard
-
-Track user engagement and activity patterns.
-
-```typescript title="User Analytics Service"
-async function getUserActivityReport(timeframe: 'day' | 'week' | 'month' = 'week') {
-  const startDate = getStartDate(timeframe) // [!code highlight]
-  
-  // Active users in timeframe
-  const activeUsers = await userService.findAll({
-    custom: and( // [!code highlight]
-      eq(users.status, 'active'), // [!code highlight]
-      gt(users.lastLoginAt, startDate) // [!code highlight]
-    ), // [!code highlight]
-    orderBy: { lastLoginAt: 'desc' },
-    limit: 100,
-    parse: (data) => data.map(user => ({ // [!code highlight]
-      ...user, // [!code highlight]
-      activityScore: calculateActivityScore(user, timeframe) // [!code highlight]
-    })) // [!code highlight]
-  })
-  
-  // User registration trends
-  const newUsers = await userService.findAll({
-    custom: gt(users.createdAt, startDate), // [!code highlight]
-    orderBy: { createdAt: 'desc' }
-  })
-  
-  // Engagement metrics by user type
-  const engagementByRole = await Promise.all([
-    getUserEngagementByRole('admin', startDate),
-    getUserEngagementByRole('moderator', startDate),
-    getUserEngagementByRole('user', startDate)
-  ])
-  
-  return {
-    activeUsers,
-    newUsers,
-    engagementByRole,
-    summary: {
-      totalActive: activeUsers.length,
-      totalNew: newUsers.length,
-      averageActivityScore: activeUsers.reduce((sum, u) => sum + u.activityScore, 0) / activeUsers.length
-    }
+    pageSize,
+    hasMore: products.length === pageSize
   }
 }
 
-async function getUserEngagementByRole(role: string, startDate: Date) { // [!code highlight]
-  return await userService.findBy( // [!code highlight]
-    { role }, // [!code highlight]
-    { // [!code highlight]
-      custom: gt(users.lastLoginAt, startDate), // [!code highlight]
-      parse: (data) => ({ // [!code highlight]
-        role, // [!code highlight]
-        count: data.length, // [!code highlight]
-        avgSessionDuration: data.reduce((sum, u) => sum + (u.avgSessionDuration || 0), 0) / data.length // [!code highlight]
-      }) // [!code highlight]
-    } // [!code highlight]
-  ) // [!code highlight]
-} // [!code highlight]
-```
-
-### Multi-tenant User Management
-
-Handle user queries in multi-tenant applications.
-
-```typescript title="Tenant User Service"
-async function getTenantUsers(tenantId: string, filters: UserFilters = {}) {
-  const { role, status, department, page = 1 } = filters
+// Efficient counting with conditions
+async function getProductStats() {
+  const total = await productService.count()
+  const inStock = await productService.count({ inStock: true })
+  const featured = await productService.count({ featured: true })
   
-  const criteria: Partial<User> = {} // [!code highlight]
-  
-  if (role) criteria.role = role // [!code highlight]
-  if (status) criteria.status = status // [!code highlight]
-  if (department) criteria.department = department // [!code highlight]
-  
-  return await userService.findBy(
-    criteria,
-    {
-      workspace: { // [!code highlight]
-        field: 'tenantId', // [!code highlight]
-        value: tenantId // [!code highlight]
-      }, // [!code highlight]
-      relations: [{
-        table: userProfiles,
-        type: 'left',
-        sql: eq(users.id, userProfiles.userId)
-      }],
-      orderBy: { name: 'asc' },
-      page,
-      limit: 25,
-      parse: (data) => data.map(row => ({ // [!code highlight]
-        ...row.users, // [!code highlight]
-        profile: row.userProfiles // [!code highlight]
-      })) // [!code highlight]
-    }
-  )
-}
-
-// Get tenant usage statistics
-async function getTenantUsageStats(tenantId: string) {
-  const [totalUsers, activeUsers, adminUsers] = await Promise.all([
-    userService.count(
-      {},
-      { workspace: { field: 'tenantId', value: tenantId } } // [!code highlight]
-    ),
-    userService.count(
-      { status: 'active' },
-      { workspace: { field: 'tenantId', value: tenantId } } // [!code highlight]
-    ),
-    userService.count(
-      { role: 'admin' },
-      { workspace: { field: 'tenantId', value: tenantId } } // [!code highlight]
-    )
-  ])
-  
-  return { totalUsers, activeUsers, adminUsers }
+  return { total, inStock, featured }
 }
 ```
-
-## Advanced Pagination Patterns
-
-### Infinite Scroll with Cursor Pagination
-
-Implement efficient infinite scroll for large datasets.
-
-```typescript title="Infinite Scroll Service"
-class InfiniteScrollService {
-  private lastCursor: Date | null = null
-  private hasMore = true
-  
-  async loadNextPage(limit = 20) { // [!code highlight]
-    if (!this.hasMore) return { items: [], hasMore: false } // [!code highlight]
-    
-    const result = await postService.findWithCursor({
-      cursor: this.lastCursor, // [!code highlight]
-      limit,
-      orderBy: { createdAt: 'desc' },
-      custom: eq(posts.status, 'published'),
-      relations: [{
-        table: users,
-        type: 'inner',
-        sql: eq(posts.authorId, users.id)
-      }],
-      parse: (data) => data.map(row => ({ // [!code highlight]
-        ...row.posts, // [!code highlight]
-        author: row.users.name // [!code highlight]
-      })) // [!code highlight]
-    })
-    
-    this.lastCursor = result.nextCursor // [!code highlight]
-    this.hasMore = result.pagination.hasNext // [!code highlight]
-    
-    return {
-      items: result.items,
-      hasMore: this.hasMore
-    }
-  }
-  
-  reset() { // [!code highlight]
-    this.lastCursor = null // [!code highlight]
-    this.hasMore = true // [!code highlight]
-  } // [!code highlight]
-}
-```
-
-### Search with Faceted Filters
-
-Implement search functionality with faceted filtering options.
-
-```typescript title="Faceted Search Service"
-async function facetedProductSearch(searchTerm: string, facets: ProductFacets = {}) {
-  const { categories, brands, priceRanges, ratings } = facets
-  
-  const baseConditions = [
-    eq(products.status, 'active'), // [!code highlight]
-    searchTerm ? or( // [!code highlight]
-      like(products.name, `%${searchTerm}%`), // [!code highlight]
-      like(products.description, `%${searchTerm}%`) // [!code highlight]
-    ) : undefined // [!code highlight]
-  ].filter(Boolean) // [!code highlight]
-  
-  // Apply facet filters
-  if (categories?.length) {
-    baseConditions.push(sql`${products.categoryId} = ANY(${categories})`) // [!code highlight]
-  }
-  
-  if (brands?.length) {
-    baseConditions.push(sql`${products.brandId} = ANY(${brands})`) // [!code highlight]
-  }
-  
-  if (priceRanges?.length) {
-    const priceConditions = priceRanges.map(range => // [!code highlight]
-      between(products.price, range.min, range.max) // [!code highlight]
-    ) // [!code highlight]
-    baseConditions.push(or(...priceConditions)) // [!code highlight]
-  }
-  
-  if (ratings?.length) {
-    baseConditions.push(sql`${products.averageRating} = ANY(${ratings})`) // [!code highlight]
-  }
-  
-  return await productService.findAll({
-    custom: and(...baseConditions), // [!code highlight]
-    relations: [
-      {
-        table: categories,
-        type: 'inner',
-        sql: eq(products.categoryId, categories.id)
-      },
-      {
-        table: brands,
-        type: 'inner',
-        sql: eq(products.brandId, brands.id)
-      }
-    ],
-    orderBy: { featured: 'desc', averageRating: 'desc' },
-    parse: (data) => data.map(row => ({ // [!code highlight]
-      ...row.products, // [!code highlight]
-      category: row.categories, // [!code highlight]
-      brand: row.brands // [!code highlight]
-    })) // [!code highlight]
-  })
-}
-```
-
-## Performance Optimization Patterns
-
-### Query Result Caching
-
-Cache frequently accessed query results for better performance.
-
-```typescript title="Cached Query Service"
-class CachedQueryService {
-  private cache = new Map<string, { data: any; expiry: number }>()
-  
-  async getCachedPosts(cacheKey: string, queryFn: () => Promise<any>, ttl = 300000) { // 5 minutes
-    const cached = this.cache.get(cacheKey) // [!code highlight]
-    
-    if (cached && cached.expiry > Date.now()) { // [!code highlight]
-      return cached.data // [!code highlight]
-    } // [!code highlight]
-    
-    const data = await queryFn() // [!code highlight]
-    
-    this.cache.set(cacheKey, { // [!code highlight]
-      data, // [!code highlight]
-      expiry: Date.now() + ttl // [!code highlight]
-    }) // [!code highlight]
-    
-    return data
-  }
-  
-  clearCache(pattern?: string) { // [!code highlight]
-    if (pattern) { // [!code highlight]
-      for (const key of this.cache.keys()) { // [!code highlight]
-        if (key.includes(pattern)) { // [!code highlight]
-          this.cache.delete(key) // [!code highlight]
-        } // [!code highlight]
-      } // [!code highlight]
-    } else { // [!code highlight]
-      this.cache.clear() // [!code highlight]
-    } // [!code highlight]
-  } // [!code highlight]
-}
-```
-
-### Batch Query Processing
-
-Process multiple related queries efficiently.
-
-```typescript title="Batch Query Service"
-async function getUserDashboardData(userId: number) {
-  // Execute multiple queries in parallel
-  const [userProfile, recentOrders, favoriteProducts, notifications] = await Promise.all([
-    // User profile with preferences
-    userService.findById(userId, { // [!code highlight]
-      relations: [{ // [!code highlight]
-        table: userPreferences, // [!code highlight]
-        type: 'left', // [!code highlight]
-        sql: eq(users.id, userPreferences.userId) // [!code highlight]
-      }] // [!code highlight]
-    }), // [!code highlight]
-    
-    // Recent orders
-    orderService.findBy( // [!code highlight]
-      { userId }, // [!code highlight]
-      { // [!code highlight]
-        orderBy: { createdAt: 'desc' }, // [!code highlight]
-        limit: 5 // [!code highlight]
-      } // [!code highlight]
-    ), // [!code highlight]
-    
-    // Favorite products
-    favoriteService.findBy( // [!code highlight]
-      { userId }, // [!code highlight]
-      { // [!code highlight]
-        relations: [{ // [!code highlight]
-          table: products, // [!code highlight]
-          type: 'inner', // [!code highlight]
-          sql: eq(favorites.productId, products.id) // [!code highlight]
-        }], // [!code highlight]
-        limit: 10 // [!code highlight]
-      } // [!code highlight]
-    ), // [!code highlight]
-    
-    // Unread notifications
-    notificationService.findBy( // [!code highlight]
-      { userId, isRead: false }, // [!code highlight]
-      { // [!code highlight]
-        orderBy: { createdAt: 'desc' }, // [!code highlight]
-        limit: 5 // [!code highlight]
-      } // [!code highlight]
-    ) // [!code highlight]
-  ])
-  
-  return {
-    profile: userProfile,
-    orders: recentOrders,
-    favorites: favoriteProducts,
-    notifications
-  }
-}
-```
-
-<Callout type="info">
-These examples demonstrate production-ready query patterns. Always consider your specific use case, data volume, and performance requirements when implementing similar patterns.
-</Callout>
