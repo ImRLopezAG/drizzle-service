@@ -1,7 +1,7 @@
 
 import { describe, expectTypeOf, it } from 'vitest'
 import { service, todos, users } from './schema'
-import type { Service, SQLiteDb, QueryOperations, MutationOperations, Handler, MutationsBulkOperations, ServiceHooks, ServiceMethods } from 'drizzle-service/builder/types.d.ts'
+import type { Service, SQLiteDb, QueryOperations, MutationOperations, Handler, MutationsBulkOperations, ServiceHooks, ServiceMethods, BulkOperationResult } from 'drizzle-service/builder/types.d.ts'
 
 // Service instances for type testing
 const userService = service(users)
@@ -210,10 +210,10 @@ describe('SQLite Service Types', () => {
 				.toMatchTypeOf<ServiceHooks<TodoEntity> | undefined>()
 
 			expectTypeOf(userService.bulkCreate).returns.toEqualTypeOf<
-				Handler<UserSelect[]>
+				Promise<BulkOperationResult<UserSelect[], UserEntity>>
 			>()
 			expectTypeOf(todosService.bulkCreate).returns.toEqualTypeOf<
-				Handler<TodoSelect[]>
+				Promise<BulkOperationResult<TodoSelect[], TodoEntity>>
 			>()
 		})
 
@@ -235,10 +235,10 @@ describe('SQLite Service Types', () => {
 			>()
 
 			expectTypeOf(userService.bulkUpdate).returns.toEqualTypeOf<
-				Handler<UserSelect[]>
+				Promise<BulkOperationResult<UserSelect[], UserEntity>>
 			>()
 			expectTypeOf(todosService.bulkUpdate).returns.toEqualTypeOf<
-				Handler<TodoSelect[]>
+				Promise<BulkOperationResult<TodoSelect[], TodoEntity>>
 			>()
 		})
 
@@ -254,10 +254,10 @@ describe('SQLite Service Types', () => {
 				.toEqualTypeOf<string[]>()
 
 			expectTypeOf(userService.bulkDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, UserEntity>>
 			>()
 			expectTypeOf(todosService.bulkDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, TodoEntity>>
 			>()
 		})
 
@@ -273,10 +273,10 @@ describe('SQLite Service Types', () => {
 				.toEqualTypeOf<string[]>()
 
 			expectTypeOf(userService.bulkHardDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, UserEntity>>
 			>()
 			expectTypeOf(todosService.bulkHardDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, TodoEntity>>
 			>()
 		})
 	})

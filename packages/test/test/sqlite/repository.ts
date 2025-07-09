@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import { expect } from 'vitest'
 import { z } from 'zod/v4'
 import { service, tenants, todos, users } from './schema'
-const timestamp = performance.now()
+const timestamp = Date.now()
 const uniquePrefix = `Test-${timestamp}`
 
 const userService = service(users, {

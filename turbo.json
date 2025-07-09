@@ -5,6 +5,10 @@
       "cache": false,
       "outputs": []
     },
+    "test:bun": {
+      "cache": false,
+      "outputs": []
+    },
     "build": {
       "dependsOn": [
         "^build"

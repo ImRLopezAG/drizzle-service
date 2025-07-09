@@ -71,6 +71,7 @@ export type ServiceOptions<
 	readonly defaultLimit?: number
 	readonly maxLimit?: number
 	readonly soft?: SoftDeleteOption<T>
+	readonly batchSize?: number
 	override?: (baseMethods: ServiceMethods<T>) => Partial<ServiceMethods<T>>
 } & (T['$inferSelect'] extends { id: string }
 	? {
@@ -378,22 +379,50 @@ export interface MutationsBulkOperations<
 	bulkCreate: (
 		data: T['$inferInsert'][],
 		hooks?: ServiceHooks<T>,
-	) => Handler<T['$inferSelect'][]>
+	) => Promise<BulkOperationResult<T['$inferSelect'][], T>>
 	bulkUpdate: (
 		data: Array<{
 			id: IdType<T, TOpts>
 			changes: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>
 		}>,
 		hooks?: ServiceHooks<T>,
-	) => Handler<T['$inferSelect'][]>
+	) => Promise<BulkOperationResult<T['$inferSelect'][], T>>
 	bulkDelete: (
 		ids: IdType<T, TOpts>[],
 		hooks?: ServiceHooks<T>,
-	) => Promise<{ readonly success: boolean; readonly message?: string }>
+	) => Promise<
+		BulkOperationResult<
+			{
+				readonly success: boolean
+				readonly message?: string
+			},
+			T
+		>
+	>
 	bulkHardDelete: (
 		ids: IdType<T, TOpts>[],
 		hooks?: ServiceHooks<T>,
-	) => Promise<{ readonly success: boolean; readonly message?: string }>
+	) => Promise<
+		BulkOperationResult<
+			{
+				readonly success: boolean
+				readonly message?: string
+			},
+			T
+		>
+	>
+	bulkRestore: (
+		ids: IdType<T, TOpts>[],
+		hooks?: ServiceHooks<T>,
+	) => Promise<
+		BulkOperationResult<
+			{
+				readonly success: boolean
+				readonly message?: string
+			},
+			T
+		>
+	>
 }
 
 export interface ServiceMethods<
@@ -465,4 +494,17 @@ export type FilterExpression<T> = [string, ...T[]]
 
 export type FilterCriteria<T extends BaseEntity> = {
 	[K in keyof T['$inferSelect']]?: FilterExpression<T['$inferSelect'][K]>
+}
+
+export interface BulkOperationResult<T, E extends BaseEntity> {
+	batch: {
+		size: number
+		processed: number
+		failed: number
+		errors?: Array<{
+			id: IdType<E>
+			error: string
+		}>
+	}
+	data: T
 }

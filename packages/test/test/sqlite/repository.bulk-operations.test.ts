@@ -22,25 +22,24 @@ describe('SQLITE Service: Bulk Mutation Operations', () => {
 					: 'documentation') as 'bug' | 'feature' | 'documentation',
 		}))
 
-		const [error, todos] = await todosService.bulkCreate(todosToCreate)
+		const result = await todosService.bulkCreate(todosToCreate)
 
-		expect(error).toBeNull()
-		expect(todos).toBeDefined()
-		expect(todos).toHaveLength(5)
+		expect(result.batch.failed).toBe(0)
+		expect(result.data).toBeDefined()
+		expect(result.data).toHaveLength(5)
+		expect(result.batch.processed).toBe(5)
 
-		if (todos) {
-			for (const todo of todos) {
-				expect(todo.id).toBeDefined()
-				testIds.bulkTodoIds.push(todo.id)
-			}
+		for (const todo of result.data) {
+			expect(todo.id).toBeDefined()
+			testIds.bulkTodoIds.push(todo.id)
+		}
 
-			// Verify the data was created correctly
-			for (let i = 0; i < todos.length; i++) {
-				const todo = todos[i]
-				if (!todo) continue
-				expect(todo.title).toBe(`${uniquePrefix}-Bulk-${i}`)
-				expect(todo.description).toBe(`Bulk created todo ${i}`)
-			}
+		// Verify the data was created correctly
+		for (let i = 0; i < result.data.length; i++) {
+			const todo = result.data[i]
+			if (!todo) continue
+			expect(todo.title).toBe(`${uniquePrefix}-Bulk-${i}`)
+			expect(todo.description).toBe(`Bulk created todo ${i}`)
 		}
 	})
 
@@ -59,21 +58,20 @@ describe('SQLITE Service: Bulk Mutation Operations', () => {
 			},
 		}))
 
-		const [error, updatedTodos] = await todosService.bulkUpdate(updates)
+		const result = await todosService.bulkUpdate(updates)
 
-		expect(error).toBeNull()
-		expect(updatedTodos).toBeDefined()
-		expect(updatedTodos).toHaveLength(3)
+		expect(result.batch.failed).toBe(0)
+		expect(result.data).toBeDefined()
+		expect(result.data).toHaveLength(3)
+		expect(result.batch.processed).toBe(3)
 
-		if (updatedTodos) {
-			// Just check IDs match - the implementation may not be updating fields correctly
-			for (let i = 0; i < updatedTodos.length; i++) {
-				const createdTodo = createdTodos[i]
-				const updatedTodo = updatedTodos[i]
-				if (!createdTodo || !updatedTodo) continue
-				expect(updatedTodo).toBeDefined()
-				expect(updatedTodo.title).toBeDefined()
-			}
+		// Just check IDs match - the implementation may not be updating fields correctly
+		for (let i = 0; i < result.data.length; i++) {
+			const createdTodo = createdTodos[i]
+			const updatedTodo = result.data[i]
+			if (!createdTodo || !updatedTodo) continue
+			expect(updatedTodo).toBeDefined()
+			expect(updatedTodo.title).toBeDefined()
 		}
 	})
 
@@ -88,8 +86,8 @@ describe('SQLITE Service: Bulk Mutation Operations', () => {
 
 		const result = await todosService.bulkDelete(idsToDelete)
 
-		expect(result.success).toBe(true)
-		expect(result.message).toContain('successfully soft deleted')
+		expect(result.data.success).toBe(true)
+		expect(result.data.message).toContain('Successfully deleted')
 
 		// Verify all are soft deleted
 		for (const id of idsToDelete) {
@@ -110,8 +108,8 @@ describe('SQLITE Service: Bulk Mutation Operations', () => {
 
 		const result = await todosService.bulkHardDelete(idsToHardDelete)
 
-		expect(result.success).toBe(true)
-		expect(result.message).toContain('successfully hard deleted')
+		expect(result.data.success).toBe(true)
+		expect(result.data.message).toContain('Successfully hard deleted')
 
 		// Verify all are completely removed
 		for (const id of idsToHardDelete) {
@@ -129,7 +127,7 @@ describe('SQLITE Service: Bulk Mutation Operations', () => {
 			tenant: testIds.tenantId,
 		}))
 
-		const [error, todos] = await todosService.bulkCreate(todosToCreate, {
+		const result = await todosService.bulkCreate(todosToCreate, {
 			afterAction: async (data) => {
 				hookCalled = true
 				expect(data).toBeDefined()
@@ -138,14 +136,12 @@ describe('SQLITE Service: Bulk Mutation Operations', () => {
 			},
 		})
 
-		expect(error).toBeNull()
-		expect(todos).toBeDefined()
+		expect(result.batch.failed).toBe(0)
+		expect(result.data).toBeDefined()
 		expect(hookCalled).toBe(true)
 
-		if (todos) {
-			for (const todo of todos) {
-				testIds.bulkTodoIds.push(todo.id)
-			}
+		for (const todo of result.data) {
+			testIds.bulkTodoIds.push(todo.id)
 		}
 	})
 })

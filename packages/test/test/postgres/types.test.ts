@@ -7,6 +7,7 @@ import type {
 	Service,
 	ServiceHooks,
 	ServiceMethods,
+	BulkOperationResult,
 } from 'drizzle-service/builder/types.d.ts'
 import { describe, expectTypeOf, it } from 'vitest'
 import { service, todos, users } from './schema'
@@ -217,11 +218,11 @@ describe('PostgreSQL Service Types', () => {
 				.parameter(1)
 				.toMatchTypeOf<ServiceHooks<TodoEntity> | undefined>()
 
-			expectTypeOf(userService.bulkCreate).returns.toEqualTypeOf<
-				Handler<UserSelect[]>
+			expectTypeOf(userService.bulkCreate).returns.toMatchTypeOf<
+				Promise<BulkOperationResult<UserSelect[], UserEntity>>
 			>()
-			expectTypeOf(todosService.bulkCreate).returns.toEqualTypeOf<
-				Handler<TodoSelect[]>
+			expectTypeOf(todosService.bulkCreate).returns.toMatchTypeOf<
+				Promise<BulkOperationResult<TodoSelect[], TodoEntity>>
 			>()
 		})
 
@@ -243,10 +244,10 @@ describe('PostgreSQL Service Types', () => {
 			>()
 
 			expectTypeOf(userService.bulkUpdate).returns.toEqualTypeOf<
-				Handler<UserSelect[]>
+				Promise<BulkOperationResult<UserSelect[], UserEntity>>
 			>()
 			expectTypeOf(todosService.bulkUpdate).returns.toEqualTypeOf<
-				Handler<TodoSelect[]>
+				Promise<BulkOperationResult<TodoSelect[], TodoEntity>>
 			>()
 		})
 
@@ -262,10 +263,10 @@ describe('PostgreSQL Service Types', () => {
 				.toEqualTypeOf<string[]>()
 
 			expectTypeOf(userService.bulkDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, UserEntity>>
 			>()
 			expectTypeOf(todosService.bulkDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, TodoEntity>>
 			>()
 		})
 
@@ -281,10 +282,10 @@ describe('PostgreSQL Service Types', () => {
 				.toEqualTypeOf<string[]>()
 
 			expectTypeOf(userService.bulkHardDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, UserEntity>>
 			>()
 			expectTypeOf(todosService.bulkHardDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, TodoEntity>>
 			>()
 		})
 	})
