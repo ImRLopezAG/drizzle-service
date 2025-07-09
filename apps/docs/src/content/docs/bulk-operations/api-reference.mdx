@@ -2,9 +2,31 @@
 title: API Reference
 description: Complete API reference for all bulk operations including method signatures, parameters, and return types
 ---
+The Drizzle Service provides high-performance bulk operations that allow you to efficiently process multiple records using automatic batching. These operations are optimized for performance, memory efficiency, and provide comprehensive error handling for batch processing scenarios.
 
-import { TypeTable } from 'fumadocs-ui/components/type-table'
+## Key Features
 
+- **High Performance**: Optimized for processing large datasets with minimal database round trips
+- **Automatic Batching**: Splits large operations into configurable batch sizes for better performance and memory management
+- **Individual Record Processing**: Each record is processed individually within batches for granular error handling
+- **Granular Error Handling**: Tracks success and failure rates with detailed error reporting per record
+- **Type Safety**: Full TypeScript support with compile-time validation
+- **Memory Efficient**: Processes large datasets without excessive memory usage through batching
+- **Soft Delete Support**: Bulk soft delete operations respect service soft delete configuration
+- **Lifecycle Hooks**: Before and after hooks for custom business logic
+
+
+## Available Operations
+
+### Bulk Mutation Operations
+
+| Operation | Description |
+|-----------|-------------|
+| `bulkCreate(data[])` | Create multiple records in batches without transactions |
+| `bulkUpdate(updates[])` | Update multiple records individually with granular error tracking |
+| `bulkDelete(ids[])` | Soft delete multiple records in batches (respects soft delete configuration) |
+| `bulkHardDelete(ids[])` | Permanently delete multiple records in batches |
+| `bulkRestore(ids[])` | Restore multiple soft-deleted records in batches |
 
 ## bulkCreate()
 

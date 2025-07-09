@@ -1,0 +1,912 @@
+---
+title: Real-World Bulk Operations Examples
+description: Practical examples from real business scenarios demonstrating bulk operations for high-performance data processing
+---
+
+## Basic Setup
+
+First, let's set up service instances for real-world scenarios:
+
+```typescript title="Service Setup"
+import { drizzleService } from 'drizzle-service/pg'
+import { customers, orders, products, inventory, employees, reviews, db } from './schema'
+
+// Initialize the service
+const service = drizzleService(db)
+
+// Customer service with soft delete
+const customerService = service(customers, {
+  soft: {
+    field: 'deletedAt',
+    deletedValue: 'NOT_NULL', // Uses timestamp
+    notDeletedValue: null
+  }
+})
+
+// Order service for e-commerce
+const orderService = service(orders)
+
+// Product catalog service
+const productService = service(products, {
+  soft: {
+    field: 'isActive',
+    deletedValue: false,
+    notDeletedValue: true
+  }
+})
+
+// Inventory management
+const inventoryService = service(inventory)
+
+// Employee management with status-based soft delete
+const employeeService = service(employees, {
+  soft: {
+    field: 'status',
+    deletedValue: 'terminated',
+    notDeletedValue: 'active'
+  }
+})
+
+// Product reviews
+const reviewService = service(reviews, {
+  soft: {
+    field: 'status',
+    deletedValue: 'deleted',
+    notDeletedValue: 'published'
+  }
+})
+```
+
+## E-Commerce Scenarios
+
+### Daily Order Processing
+
+```typescript title="Process Daily Orders from Payment Gateway"
+// Real scenario: Process overnight batch of orders from payment gateway
+const processDailyOrders = async (paymentGatewayOrders: any[]) => {
+  // Transform payment gateway data to our order format
+  const orderData = paymentGatewayOrders.map(payment => ({
+    customerId: payment.customer_id,
+    paymentGatewayId: payment.transaction_id,
+    totalAmount: payment.amount_cents / 100, // Convert cents to dollars
+    currency: payment.currency,
+    status: payment.status === 'completed' ? 'confirmed' : 'pending',
+    paymentMethod: payment.payment_method,
+    shippingAddress: JSON.stringify(payment.shipping_address),
+    billingAddress: JSON.stringify(payment.billing_address),
+    orderDate: new Date(payment.created_at),
+    items: JSON.stringify(payment.line_items)
+  }))
+
+  const result = await orderService.bulkCreate(orderData)
+
+  if (result.batch.failed > 0) {
+    console.error(`❌ ${result.batch.failed} orders failed to process`)
+    
+    // Log failed orders for manual review
+    result.batch.errors?.forEach(error => {
+      console.error(`Order ${error.id}: ${error.error}`)
+    })
+
+    // Send alert to operations team
+    await sendOperationsAlert({
+      type: 'order_processing_failures',
+      count: result.batch.failed,
+      errors: result.batch.errors
+    })
+  }
+
+  // Update inventory for successfully created orders
+  if (result.data.length > 0) {
+    await updateInventoryForOrders(result.data)
+    
+    // Send confirmation emails
+    await sendOrderConfirmations(result.data)
+  }
+
+  return {
+    totalProcessed: result.data.length,
+    failed: result.batch.failed,
+    revenue: result.data.reduce((sum, order) => sum + order.totalAmount, 0),
+    summary: `Processed ${result.data.length} orders worth $${result.data.reduce((sum, order) => sum + order.totalAmount, 0).toFixed(2)}`
+  }
+}
+
+// Usage: Run this daily at 2 AM
+const dailyOrderResults = await processDailyOrders(paymentGatewayBatch)
+```
+
+### Product Catalog Synchronization
+
+```typescript title="Sync Product Catalog with External PIM System"
+// Real scenario: Sync with Product Information Management system
+const syncProductCatalog = async (pimProducts: any[]) => {
+  const productUpdates = pimProducts.map(pimProduct => ({
+    id: pimProduct.sku,
+    changes: {
+      name: pimProduct.title,
+      description: pimProduct.long_description,
+      price: parseFloat(pimProduct.retail_price),
+      costPrice: parseFloat(pimProduct.wholesale_price),
+      brand: pimProduct.brand_name,
+      category: pimProduct.category_path,
+      weight: pimProduct.shipping_weight,
+      dimensions: JSON.stringify(pimProduct.dimensions),
+      images: JSON.stringify(pimProduct.image_urls),
+      specifications: JSON.stringify(pimProduct.technical_specs),
+      lastSyncedAt: new Date()
+    }
+  }))
+
+  const result = await productService.bulkUpdate(productUpdates)
+
+  // Handle products that couldn't be updated (might not exist)
+  if (result.batch.failed > 0) {
+    const failedSkus = result.batch.errors?.map(error => error.id) || []
+    const newProducts = pimProducts
+      .filter(p => failedSkus.includes(p.sku))
+      .map(p => ({
+        sku: p.sku,
+        name: p.title,
+        description: p.long_description,
+        price: parseFloat(p.retail_price),
+        costPrice: parseFloat(p.wholesale_price),
+        brand: p.brand_name,
+        category: p.category_path,
+        isActive: true,
+        createdAt: new Date()
+      }))
+
+    if (newProducts.length > 0) {
+      const createResult = await productService.bulkCreate(newProducts)
+      
+      return {
+        updated: result.data.length,
+        created: createResult.data.length,
+        failed: createResult.batch.failed,
+        message: `Catalog sync: ${result.data.length} updated, ${createResult.data.length} created`
+      }
+    }
+  }
+
+  // Deactivate products not in PIM (discontinued items)
+  const pimSkus = pimProducts.map(p => p.sku)
+  const allProducts = await productService.findAll({ limit: 50000 })
+  const discontinuedProducts = allProducts
+    .filter(product => !pimSkus.includes(product.sku))
+    .map(product => product.id)
+
+  if (discontinuedProducts.length > 0) {
+    await productService.bulkDelete(discontinuedProducts)
+  }
+
+  return {
+    updated: result.data.length,
+    discontinued: discontinuedProducts.length,
+    failed: result.batch.failed,
+    message: `Catalog sync complete: ${result.data.length} products updated, ${discontinuedProducts.length} discontinued`
+  }
+}
+```
+
+### Inventory Replenishment
+
+```typescript title="Process Supplier Inventory Updates"
+// Real scenario: Daily inventory updates from suppliers
+const processInventoryUpdates = async (supplierUpdates: any[]) => {
+  const inventoryUpdates = supplierUpdates.map(update => ({
+    id: update.product_sku,
+    changes: {
+      quantityOnHand: update.available_quantity,
+      quantityReserved: update.reserved_quantity,
+      reorderPoint: update.minimum_stock_level,
+      maxStock: update.maximum_stock_level,
+      lastRestockDate: new Date(update.last_delivery_date),
+      supplierCost: parseFloat(update.unit_cost),
+      lastUpdated: new Date()
+    }
+  }))
+
+  const result = await inventoryService.bulkUpdate(inventoryUpdates)
+
+  // Identify low stock items
+  const lowStockItems = result.data.filter(item => 
+    item.quantityOnHand <= item.reorderPoint
+  )
+
+  if (lowStockItems.length > 0) {
+    // Generate purchase orders for low stock items
+    await generatePurchaseOrders(lowStockItems)
+    
+    // Alert procurement team
+    await sendProcurementAlert({
+      type: 'low_stock_alert',
+      items: lowStockItems.map(item => ({
+        sku: item.id,
+        currentStock: item.quantityOnHand,
+        reorderPoint: item.reorderPoint,
+        recommendedOrder: item.maxStock - item.quantityOnHand
+      }))
+    })
+  }
+
+  return {
+    updated: result.data.length,
+    failed: result.batch.failed,
+    lowStockAlerts: lowStockItems.length,
+    totalValue: result.data.reduce((sum, item) => 
+      sum + (item.quantityOnHand * item.supplierCost), 0
+    )
+  }
+}
+```
+
+## Customer Relationship Management
+
+### Customer Data Import from CRM
+
+```typescript title="Import Customer Data from Salesforce"
+// Real scenario: Nightly sync from Salesforce CRM
+const importCustomersFromSalesforce = async (salesforceContacts: any[]) => {
+  const customerData = salesforceContacts.map(contact => ({
+    salesforceId: contact.Id,
+    email: contact.Email?.toLowerCase(),
+    firstName: contact.FirstName,
+    lastName: contact.LastName,
+    company: contact.Account?.Name,
+    phone: contact.Phone,
+    industry: contact.Account?.Industry,
+    annualRevenue: contact.Account?.AnnualRevenue,
+    leadSource: contact.LeadSource,
+    customerSince: contact.Account?.CreatedDate ? new Date(contact.Account.CreatedDate) : null,
+    address: JSON.stringify({
+      street: contact.MailingStreet,
+      city: contact.MailingCity,
+      state: contact.MailingState,
+      postalCode: contact.MailingPostalCode,
+      country: contact.MailingCountry
+    }),
+    preferences: JSON.stringify({
+      emailOptIn: contact.HasOptedOutOfEmail === false,
+      smsOptIn: contact.DoNotCall === false,
+      preferredContactMethod: contact.Preferred_Contact_Method__c
+    }),
+    lastSyncedAt: new Date()
+  }))
+
+  const result = await customerService.bulkCreate(customerData)
+
+  if (result.batch.failed > 0) {
+    console.error(`Customer import issues: ${result.batch.failed} failed`)
+    
+    // Handle duplicate email addresses
+    const duplicateEmailErrors = result.batch.errors?.filter(error => 
+      error.error.includes('email') && error.error.includes('unique')
+    )
+
+    if (duplicateEmailErrors && duplicateEmailErrors.length > 0) {
+      // Update existing customers instead of creating new ones
+      const existingCustomers = await customerService.findAll({
+        custom: sql`email IN (${duplicateEmailErrors.map(e => 
+          salesforceContacts.find(c => c.Id === e.id)?.Email
+        ).filter(Boolean)})`
+      })
+
+      const updateData = existingCustomers.map(customer => {
+        const salesforceData = salesforceContacts.find(c => 
+          c.Email?.toLowerCase() === customer.email
+        )
+        return {
+          id: customer.id,
+          changes: {
+            salesforceId: salesforceData?.Id,
+            firstName: salesforceData?.FirstName,
+            lastName: salesforceData?.LastName,
+            company: salesforceData?.Account?.Name,
+            lastSyncedAt: new Date()
+          }
+        }
+      })
+
+      await customerService.bulkUpdate(updateData)
+    }
+  }
+
+  // Segment customers for marketing campaigns
+  const enterpriseCustomers = result.data.filter(c => 
+    c.annualRevenue && c.annualRevenue > 10000000
+  )
+  
+  const newCustomers = result.data.filter(c => {
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    return c.customerSince && c.customerSince > thirtyDaysAgo
+  })
+
+  return {
+    imported: result.data.length,
+    failed: result.batch.failed,
+    enterpriseCustomers: enterpriseCustomers.length,
+    newCustomers: newCustomers.length,
+    message: `Imported ${result.data.length} customers from Salesforce`
+  }
+}
+```
+
+### Customer Segmentation Update
+
+```typescript title="Update Customer Segments Based on Purchase History"
+// Real scenario: Monthly customer segmentation based on purchase behavior
+const updateCustomerSegments = async () => {
+  // Get customer purchase analytics
+  const customerAnalytics = await db.select({
+    customerId: customers.id,
+    totalSpent: sql<number>`SUM(${orders.totalAmount})`,
+    orderCount: sql<number>`COUNT(${orders.id})`,
+    lastOrderDate: sql<Date>`MAX(${orders.orderDate})`,
+    avgOrderValue: sql<number>`AVG(${orders.totalAmount})`
+  })
+  .from(customers)
+  .leftJoin(orders, eq(customers.id, orders.customerId))
+  .where(isNull(customers.deletedAt))
+  .groupBy(customers.id)
+
+  const segmentUpdates = customerAnalytics.map(analytics => {
+    let segment = 'new'
+    let tier = 'bronze'
+
+    // Determine customer segment
+    if (analytics.totalSpent > 50000) {
+      segment = 'vip'
+      tier = 'platinum'
+    } else if (analytics.totalSpent > 10000) {
+      segment = 'loyal'
+      tier = 'gold'
+    } else if (analytics.orderCount > 5) {
+      segment = 'regular'
+      tier = 'silver'
+    }
+
+    // Check for churn risk
+    const daysSinceLastOrder = analytics.lastOrderDate ? 
+      (Date.now() - analytics.lastOrderDate.getTime()) / (1000 * 60 * 60 * 24) : 
+      999
+
+    const isAtRisk = daysSinceLastOrder > 90 && analytics.orderCount > 0
+
+    return {
+      id: analytics.customerId,
+      changes: {
+        segment,
+        tier,
+        lifetimeValue: analytics.totalSpent || 0,
+        averageOrderValue: analytics.avgOrderValue || 0,
+        totalOrders: analytics.orderCount || 0,
+        lastOrderDate: analytics.lastOrderDate,
+        churnRisk: isAtRisk ? 'high' : 'low',
+        segmentUpdatedAt: new Date()
+      }
+    }
+  })
+
+  const result = await customerService.bulkUpdate(segmentUpdates)
+
+  // Generate marketing lists
+  const vipCustomers = result.data.filter(c => c.segment === 'vip')
+  const churnRiskCustomers = result.data.filter(c => c.churnRisk === 'high')
+
+  // Trigger marketing campaigns
+  if (vipCustomers.length > 0) {
+    await triggerVipCampaign(vipCustomers)
+  }
+
+  if (churnRiskCustomers.length > 0) {
+    await triggerWinBackCampaign(churnRiskCustomers)
+  }
+
+  return {
+    customersUpdated: result.data.length,
+    vipCustomers: vipCustomers.length,
+    churnRiskCustomers: churnRiskCustomers.length,
+    failed: result.batch.failed
+  }
+}
+```
+
+## Human Resources Management
+
+### Employee Onboarding Batch
+
+```typescript title="Process New Employee Batch from HRIS"
+// Real scenario: Weekly new hire batch from HR Information System
+const processNewHireBatch = async (hrisEmployees: any[]) => {
+  const employeeData = hrisEmployees.map(hire => ({
+    employeeId: hire.employee_number,
+    email: hire.work_email,
+    firstName: hire.first_name,
+    lastName: hire.last_name,
+    department: hire.department_code,
+    position: hire.job_title,
+    manager: hire.manager_employee_id,
+    startDate: new Date(hire.start_date),
+    salary: parseFloat(hire.annual_salary),
+    employmentType: hire.employment_type, // full-time, part-time, contractor
+    workLocation: hire.work_location,
+    status: 'active',
+    benefits: JSON.stringify({
+      healthInsurance: hire.health_plan_code,
+      retirement401k: hire.retirement_plan_enrolled,
+      ptoBalance: hire.initial_pto_hours
+    }),
+    emergencyContact: JSON.stringify({
+      name: hire.emergency_contact_name,
+      phone: hire.emergency_contact_phone,
+      relationship: hire.emergency_contact_relationship
+    })
+  }))
+
+  const result = await employeeService.bulkCreate(employeeData)
+
+  if (result.batch.failed > 0) {
+    console.error(`❌ ${result.batch.failed} employees failed to process`)
+    
+    // Alert HR team about failures
+    await sendHRAlert({
+      type: 'employee_onboarding_failures',
+      count: result.batch.failed,
+      employees: result.batch.errors?.map(error => ({
+        employeeId: error.id,
+        error: error.error
+      }))
+    })
+  }
+
+  // Trigger onboarding workflows for successful hires
+  if (result.data.length > 0) {
+    // Create IT accounts
+    await createITAccountsForNewHires(result.data)
+    
+    // Assign training modules
+    await assignOnboardingTraining(result.data)
+    
+    // Send welcome emails
+    await sendWelcomeEmails(result.data)
+    
+    // Create badge/access requests
+    await createBadgeRequests(result.data)
+  }
+
+  return {
+    employeesOnboarded: result.data.length,
+    failed: result.batch.failed,
+    departments: [...new Set(result.data.map(e => e.department))],
+    totalSalaryBudget: result.data.reduce((sum, emp) => sum + emp.salary, 0)
+  }
+}
+```
+
+### Performance Review Batch Processing
+
+```typescript title="Process Annual Performance Reviews"
+// Real scenario: Annual performance review cycle
+const processPerformanceReviews = async (reviewData: any[]) => {
+  const reviewUpdates = reviewData.map(review => ({
+    id: review.employee_id,
+    changes: {
+      lastReviewDate: new Date(review.review_date),
+      performanceRating: review.overall_rating, // 1-5 scale
+      goals: JSON.stringify(review.goals_for_next_year),
+      competencyScores: JSON.stringify(review.competency_ratings),
+      managerComments: review.manager_feedback,
+      salaryAdjustment: parseFloat(review.salary_increase_percentage),
+      promotionEligible: review.promotion_recommended === 'yes',
+      developmentPlan: JSON.stringify(review.development_activities),
+      nextReviewDate: new Date(review.next_review_date)
+    }
+  }))
+
+  const result = await employeeService.bulkUpdate(reviewUpdates)
+
+  // Identify employees for salary adjustments
+  const salaryAdjustments = result.data
+    .filter(emp => emp.salaryAdjustment > 0)
+    .map(emp => ({
+      employeeId: emp.employeeId,
+      currentSalary: emp.salary,
+      newSalary: emp.salary * (1 + emp.salaryAdjustment / 100),
+      effectiveDate: new Date(new Date().getFullYear(), 0, 1) // Next January 1st
+    }))
+
+  // Identify top performers for succession planning
+  const topPerformers = result.data.filter(emp => 
+    emp.performanceRating >= 4.5 && emp.promotionEligible
+  )
+
+  // Identify underperformers for improvement plans
+  const underperformers = result.data.filter(emp => 
+    emp.performanceRating < 2.5
+  )
+
+  // Generate reports for leadership
+  await generatePerformanceReports({
+    totalReviewed: result.data.length,
+    salaryAdjustments,
+    topPerformers: topPerformers.length,
+    underperformers: underperformers.length,
+    averageRating: result.data.reduce((sum, emp) => sum + emp.performanceRating, 0) / result.data.length
+  })
+
+  return {
+    reviewsProcessed: result.data.length,
+    failed: result.batch.failed,
+    salaryAdjustments: salaryAdjustments.length,
+    totalSalaryIncrease: salaryAdjustments.reduce((sum, adj) => 
+      sum + (adj.newSalary - adj.currentSalary), 0
+    ),
+    topPerformers: topPerformers.length,
+    underperformers: underperformers.length
+  }
+}
+```
+
+## Content Management
+
+### Product Review Moderation
+
+```typescript title="Moderate Product Reviews from Multiple Channels"
+// Real scenario: Daily review moderation from website, mobile app, and third-party platforms
+const moderateProductReviews = async (reviewsToModerate: any[]) => {
+  const processedReviews = await Promise.all(
+    reviewsToModerate.map(async review => {
+      // Run sentiment analysis and content filtering
+      const sentimentScore = await analyzeSentiment(review.content)
+      const contentFlags = await detectInappropriateContent(review.content)
+      
+      let status = 'published'
+      let moderationNotes = []
+
+      // Auto-moderation rules
+      if (contentFlags.profanity || contentFlags.spam) {
+        status = 'rejected'
+        moderationNotes.push('Automated rejection: inappropriate content detected')
+      } else if (contentFlags.suspicious || sentimentScore.confidence < 0.7) {
+        status = 'pending'
+        moderationNotes.push('Flagged for manual review')
+      }
+
+      return {
+        productId: review.product_sku,
+        customerId: review.customer_id,
+        rating: review.star_rating,
+        title: review.review_title,
+        content: review.review_text,
+        source: review.platform, // 'website', 'mobile', 'amazon', 'google'
+        status,
+        sentimentScore: sentimentScore.score,
+        sentimentLabel: sentimentScore.label, // positive, negative, neutral
+        moderationFlags: JSON.stringify(contentFlags),
+        moderationNotes: moderationNotes.join('; '),
+        isVerifiedPurchase: review.verified_purchase === true,
+        reviewDate: new Date(review.submitted_at),
+        moderatedAt: new Date()
+      }
+    })
+  )
+
+  const result = await reviewService.bulkCreate(processedReviews)
+
+  // Handle moderation workflow
+  const approvedReviews = result.data.filter(r => r.status === 'published')
+  const rejectedReviews = result.data.filter(r => r.status === 'rejected')
+  const pendingReviews = result.data.filter(r => r.status === 'pending')
+
+  // Update product ratings
+  if (approvedReviews.length > 0) {
+    await updateProductRatings(approvedReviews)
+  }
+
+  // Alert content team about pending reviews
+  if (pendingReviews.length > 0) {
+    await alertContentModerators({
+      pendingCount: pendingReviews.length,
+      reviews: pendingReviews.map(r => ({
+        id: r.id,
+        productId: r.productId,
+        rating: r.rating,
+        preview: r.content.substring(0, 100) + '...',
+        flags: r.moderationFlags
+      }))
+    })
+  }
+
+  // Send notifications to customers for approved reviews
+  await sendReviewPublishedNotifications(approvedReviews)
+
+  return {
+    totalProcessed: result.data.length,
+    failed: result.batch.failed,
+    approved: approvedReviews.length,
+    rejected: rejectedReviews.length,
+    pendingManualReview: pendingReviews.length,
+    averageRating: approvedReviews.reduce((sum, r) => sum + r.rating, 0) / (approvedReviews.length || 1)
+  }
+}
+```
+
+## Data Cleanup and Maintenance
+
+### Customer Data Cleanup
+
+```typescript title="Quarterly Customer Data Cleanup"
+// Real scenario: Quarterly cleanup of customer data for GDPR compliance
+const quarterlyCustomerCleanup = async () => {
+  const threeYearsAgo = new Date()
+  threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3)
+
+  const twoYearsAgo = new Date()
+  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
+
+  const oneYearAgo = new Date()
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+
+  // Find customers to archive (inactive for 3+ years)
+  const customersToArchive = await customerService.findAll({
+    custom: sql`
+      ${customers.lastOrderDate} < ${threeYearsAgo} 
+      OR (${customers.lastOrderDate} IS NULL AND ${customers.createdAt} < ${threeYearsAgo})
+    `,
+    limit: 10000
+  })
+
+  // Find customers to anonymize (GDPR right to be forgotten requests older than 1 year)
+  const customersToAnonymize = await customerService.findAll({
+    custom: sql`
+      ${customers.gdprDeleteRequestDate} IS NOT NULL 
+      AND ${customers.gdprDeleteRequestDate} < ${oneYearAgo}
+      AND ${customers.status} != 'anonymized'
+    `,
+    limit: 5000
+  })
+
+  let results = {
+    archived: 0,
+    anonymized: 0,
+    failed: 0,
+    errors: []
+  }
+
+  // Archive inactive customers
+  if (customersToArchive.length > 0) {
+    // Export to archive storage first
+    await exportCustomersToArchive(customersToArchive)
+
+    const archiveIds = customersToArchive.map(c => c.id)
+    const archiveResult = await customerService.bulkDelete(archiveIds)
+
+    results.archived = archiveResult.batch.processed
+    results.failed += archiveResult.batch.failed
+
+    if (archiveResult.batch.errors) {
+      results.errors.push(...archiveResult.batch.errors)
+    }
+  }
+
+  // Anonymize customers (GDPR compliance)
+  if (customersToAnonymize.length > 0) {
+    const anonymizeUpdates = customersToAnonymize.map(customer => ({
+      id: customer.id,
+      changes: {
+        email: `anonymized_${customer.id}@deleted.local`,
+        firstName: 'Deleted',
+        lastName: 'User',
+        phone: null,
+        address: null,
+        preferences: null,
+        status: 'anonymized',
+        anonymizedAt: new Date(),
+        originalEmail: customer.email // Keep hashed reference for duplicate prevention
+      }
+    }))
+
+    const anonymizeResult = await customerService.bulkUpdate(anonymizeUpdates)
+    results.anonymized = anonymizeResult.data.length
+    results.failed += anonymizeResult.batch.failed
+
+    if (anonymizeResult.batch.errors) {
+      results.errors.push(...anonymizeResult.batch.errors)
+    }
+  }
+
+  // Generate compliance report
+  await generateGDPRComplianceReport({
+    cleanupDate: new Date(),
+    customersArchived: results.archived,
+    customersAnonymized: results.anonymized,
+    failures: results.failed,
+    totalCustomersRemaining: await customerService.count()
+  })
+
+  return {
+    ...results,
+    message: `Quarterly cleanup complete: ${results.archived} archived, ${results.anonymized} anonymized`
+  }
+}
+```
+
+### Restore Accidentally Deleted Data
+
+```typescript title="Restore Accidentally Deleted Customer Accounts"
+// Real scenario: Restore customers who were accidentally deleted due to system error
+const restoreAccidentallyDeletedCustomers = async (incidentDate: Date) => {
+  // Find customers deleted on the incident date
+  const deletedCustomers = await customerService.findAll({
+    custom: sql`
+      ${customers.deletedAt} >= ${incidentDate} 
+      AND ${customers.deletedAt} < ${new Date(incidentDate.getTime() + 24 * 60 * 60 * 1000)}
+    `,
+    withDeleted: true,
+    limit: 50000
+  })
+
+  if (deletedCustomers.length === 0) {
+    return { message: 'No customers found for restoration', restored: 0 }
+  }
+
+  // Filter customers that should be restored (exclude legitimate deletions)
+  const customersToRestore = deletedCustomers.filter(customer => {
+    // Exclude customers who had GDPR deletion requests
+    if (customer.gdprDeleteRequestDate) return false
+    
+    // Exclude customers who had recent orders (they shouldn't have been deleted)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    
+    return customer.lastOrderDate && customer.lastOrderDate > thirtyDaysAgo
+  })
+
+  if (customersToRestore.length === 0) {
+    return { 
+      message: 'No eligible customers found for restoration', 
+      reviewed: deletedCustomers.length,
+      restored: 0 
+    }
+  }
+
+  const customerIds = customersToRestore.map(c => c.id)
+  const result = await customerService.bulkRestore(customerIds)
+
+  if (result.data.success) {
+    // Send restoration notifications
+    const restoredCustomers = customersToRestore.slice(0, result.batch.processed)
+    await sendRestorationNotifications(restoredCustomers)
+    
+    // Log incident for audit
+    await logDataIncident({
+      type: 'customer_restoration',
+      incidentDate,
+      customersAffected: result.batch.processed,
+      restorationDate: new Date(),
+      reason: 'Accidental deletion due to system error'
+    })
+
+    // Alert leadership
+    await sendIncidentReport({
+      severity: 'high',
+      type: 'data_restoration',
+      customersRestored: result.batch.processed,
+      message: `Successfully restored ${result.batch.processed} customer accounts`
+    })
+  }
+
+  return {
+    reviewedCustomers: deletedCustomers.length,
+    eligibleForRestore: customersToRestore.length,
+    restored: result.batch.processed,
+    failed: result.batch.failed,
+    success: result.data.success,
+    message: result.data.message,
+    errors: result.batch.errors
+  }
+}
+```
+
+## Analytics and Reporting
+
+### Monthly Sales Report Generation
+
+```typescript title="Generate Monthly Sales Analytics"
+// Real scenario: End-of-month sales reporting and customer insights
+const generateMonthlySalesReport = async (month: number, year: number) => {
+  const monthStart = new Date(year, month - 1, 1)
+  const monthEnd = new Date(year, month, 0, 23, 59, 59)
+
+  // Get orders for the month
+  const monthlyOrders = await orderService.findAll({
+    custom: sql`
+      ${orders.orderDate} >= ${monthStart} 
+      AND ${orders.orderDate} <= ${monthEnd}
+      AND ${orders.status} IN ('confirmed', 'shipped', 'delivered')
+    `,
+    limit: 100000
+  })
+
+  if (monthlyOrders.length === 0) {
+    return { message: 'No orders found for specified month' }
+  }
+
+  // Calculate customer insights
+  const customerInsights = await db.select({
+    customerId: orders.customerId,
+    orderCount: sql<number>`COUNT(*)`,
+    totalSpent: sql<number>`SUM(${orders.totalAmount})`,
+    avgOrderValue: sql<number>`AVG(${orders.totalAmount})`,
+    firstOrderDate: sql<Date>`MIN(${orders.orderDate})`,
+    lastOrderDate: sql<Date>`MAX(${orders.orderDate})`
+  })
+  .from(orders)
+  .where(and(
+    gte(orders.orderDate, monthStart),
+    lte(orders.orderDate, monthEnd),
+    inArray(orders.status, ['confirmed', 'shipped', 'delivered'])
+  ))
+  .groupBy(orders.customerId)
+
+  // Update customer analytics
+  const customerUpdates = customerInsights.map(insight => {
+    const isNewCustomer = insight.firstOrderDate >= monthStart
+    const daysBetweenOrders = insight.orderCount > 1 ? 
+      (insight.lastOrderDate.getTime() - insight.firstOrderDate.getTime()) / (1000 * 60 * 60 * 24) / (insight.orderCount - 1) :
+      null
+
+    return {
+      id: insight.customerId,
+      changes: {
+        monthlyOrderCount: insight.orderCount,
+        monthlySpent: insight.totalSpent,
+        averageOrderValue: insight.avgOrderValue,
+        isNewThisMonth: isNewCustomer,
+        averageDaysBetweenOrders: daysBetweenOrders,
+        lastAnalyticsUpdate: new Date()
+      }
+    }
+  })
+
+  const result = await customerService.bulkUpdate(customerUpdates)
+
+  // Generate report data
+  const reportData = {
+    period: { month, year, start: monthStart, end: monthEnd },
+    totals: {
+      orders: monthlyOrders.length,
+      revenue: monthlyOrders.reduce((sum, order) => sum + order.totalAmount, 0),
+      customers: customerInsights.length,
+      newCustomers: customerInsights.filter(c => c.firstOrderDate >= monthStart).length
+    },
+    averages: {
+      orderValue: monthlyOrders.reduce((sum, order) => sum + order.totalAmount, 0) / monthlyOrders.length,
+      ordersPerCustomer: monthlyOrders.length / customerInsights.length,
+      revenuePerCustomer: monthlyOrders.reduce((sum, order) => sum + order.totalAmount, 0) / customerInsights.length
+    },
+    customerSegments: {
+      highValue: result.data.filter(c => c.monthlySpent > 1000).length,
+      regular: result.data.filter(c => c.monthlySpent >= 100 && c.monthlySpent <= 1000).length,
+      lowValue: result.data.filter(c => c.monthlySpent < 100).length
+    }
+  }
+
+  // Store report for dashboard
+  await storeMonthlyReport(reportData)
+
+  // Send to stakeholders
+  await sendMonthlyReportEmail(reportData)
+
+  return {
+    ...reportData,
+    customersUpdated: result.data.length,
+    updatesFailed: result.batch.failed,
+    message: `Monthly report generated: $${reportData.totals.revenue.toFixed(2)} revenue from ${reportData.totals.orders} orders`
+  }
+}
+```
+
+These real-world examples demonstrate practical applications of bulk operations in actual business scenarios, showing how they solve real problems with proper error handling, business logic, and integration with other systems. ⚠️*These examples reflect common patterns found in production systems, though specific implementations may vary based on business requirements.*

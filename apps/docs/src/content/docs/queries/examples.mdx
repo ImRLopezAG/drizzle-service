@@ -27,10 +27,10 @@ const productService = service(products, { // [!code highlight]
 })
 
 // Get all active products with pagination
-const activeProducts = await productService.findAll({ // [!code focus]
+const activeProducts = await productService.findAll({ // [!code]
   orderBy: { updatedAt: 'desc' },
   limit: 20
-}) // [!code focus]
+}) // [!code]
 
 console.log(`Found ${activeProducts.length} active products`)
 
@@ -79,10 +79,10 @@ const appleProducts = await productService.findBy(
 
 // Advanced filtering with multiple conditions
 const premiumProductsInStock = await productService.findBy({
-  price: { gte: 1000 }, // [!code focus]
-  inStock: true, // [!code focus]
-  rating: { gte: 4.5 }, // [!code focus]
-  categoryId: { in: ['electronics', 'computers'] } // [!code focus]
+  price: { gte: 1000 }, // [!code]
+  inStock: true, // [!code]
+  rating: { gte: 4.5 }, // [!code]
+  categoryId: { in: ['electronics', 'computers'] } // [!code]
 })
 ```
 
@@ -114,9 +114,9 @@ const activeUsers = await userService.findAll({
 
 // Find users by role and department
 const engineeringManagers = await userService.findBy({
-  role: 'manager', // [!code focus]
-  department: 'engineering', // [!code focus]
-  status: 'active' // [!code focus]
+  role: 'manager', // [!code]
+  department: 'engineering', // [!code]
+  status: 'active' // [!code]
 })
 
 // Get recently registered users (last 7 days)
@@ -157,8 +157,8 @@ const seniorDevelopers = await userService.findBy({
 // Find inactive users for cleanup
 const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
 const inactiveUsers = await userService.findBy({
-  lastLoginAt: { lt: threeMonthsAgo }, // [!code focus]
-  status: 'active' // [!code focus]
+  lastLoginAt: { lt: threeMonthsAgo }, // [!code]
+  status: 'active' // [!code]
 })
 
 // Get users by location and preferences

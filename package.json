@@ -7,6 +7,7 @@
     "build": "turbo build",
     "build:lib": "turbo build --filter=drizzle-service",
     "test": "turbo test",
+    "test:bun": "turbo test:bun --filter=@repo/tests",
     "lint": "turbo lint",
     "dev": "turbo dev",
     "lint:unsafe": "turbo lint:unsafe",

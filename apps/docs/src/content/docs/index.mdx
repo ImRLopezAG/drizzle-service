@@ -4,8 +4,6 @@ index: true
 description: A comprehensive, type-safe service layer for Drizzle ORM with support for PostgreSQL and SQLite, featuring advanced query capabilities, mutations, and bulk operations
 ---
 
-import { Database, Shield, Zap } from 'lucide-react'
-
 # Drizzle Service
 
 A powerful, type-safe service layer for Drizzle ORM that provides a comprehensive set of operations for building robust database applications.
@@ -68,6 +66,26 @@ Extensive configuration options for soft deletes, pagination limits, and custom 
 npm install drizzle-service drizzle-orm
 ```
 
+#### Tsconfig Setup
+
+<Callout
+  title="Configure TypeScript for Drizzle Service"
+  type="warning"
+>
+To ensure optimal performance and compatibility, configure your TypeScript project with the following settings:
+</Callout>
+
+```json
+{
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "module": "esnext",
+    "target": "esnext",
+    // ..Rest of your config
+  }
+}
+```
+
 ### Basic Usage
 
 ```typescript title="E-commerce Product Management"
@@ -102,8 +120,8 @@ const orderService = service(orders, { // [!code highlight]
 
 // Query product catalog
 const activeProducts = await productService.findAll({
-  orderBy: { updatedAt: 'desc' }, // [!code focus]
-  limit: 20 // [!code focus]
+  orderBy: { updatedAt: 'desc' }, // [!code]
+  limit: 20 // [!code]
 })
 
 const featuredProducts = await productService.findBy({ 
@@ -201,7 +219,7 @@ Specialized adapters for PostgreSQL and SQLite that handle database-specific opt
 
 The service uses a comprehensive error handling approach:
 
-- **Handler Pattern** - Mutations return `[error, result]` tuples for explicit error handling
+- **Error first Pattern** - Mutations return `[error, result]` tuples for explicit error handling
 - **Detailed Error Information** - Rich error objects with context and suggestions
 - **Validation Errors** - Type-safe validation with detailed field-level errors
 - **Database Constraint Handling** - Automatic handling of unique constraints and foreign key violations
@@ -222,14 +240,8 @@ Use bulk operations for processing multiple records to improve performance and m
 
 ## Next Steps
 
-<Cards>
-  <Card href="/docs/queries/api-reference" title="Query API Reference">
-    Complete API documentation for all query operations.
-  </Card>
-  <Card href="/docs/mutations/api-reference" title="Mutation API Reference">
-    Detailed documentation for create, update, and delete operations.
-  </Card>
-  <Card href="/docs/bulk-operations/api-reference" title="Bulk Operations API Reference">
-    API reference for high-performance bulk operations.
-  </Card>
-</Cards>
+<DocsCategory url="/queries" />
+
+<DocsCategory url="/mutations" />
+
+<DocsCategory url="/bulk-operations" />

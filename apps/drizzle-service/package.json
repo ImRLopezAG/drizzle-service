@@ -2,7 +2,7 @@
   "name": "drizzle-service",
   "module": "lib/index.js",
   "type": "module",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "A service for managing Drizzle ORM entities with advanced CRUD operations, pagination, soft deletes, relations, and bulk operations full type-safe",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -16,20 +16,37 @@
     "url": "https://github.com/ImRLopezAG/drizzle-service.git"
   },
   "homepage": "https://drizzle-service-docs.vercel.app/",
+  "typesVersions": {
+    "*": {
+      "pg": [
+        "lib/pg/index.d.ts"
+      ],
+      "sqlite": [
+        "lib/sqlite/index.d.ts"
+      ],
+      "builder/*": [
+        "lib/builder/*.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
+      "types": "./lib/index.d.ts",
       "import": "./lib/index.js",
       "require": "./lib/index.js"
     },
     "./pg": {
+      "types": "./lib/pg/index.d.ts",
       "import": "./lib/pg/index.js",
       "require": "./lib/pg/index.js"
     },
     "./sqlite": {
+      "types": "./lib/sqlite/index.d.ts",
       "import": "./lib/sqlite/index.js",
       "require": "./lib/sqlite/index.js"
     },
     "./builder/*": {
+      "types": "./lib/builder/*.d.ts",
       "import": "./lib/builder/*",
       "require": "./lib/builder/*"
     }
