@@ -14,9 +14,8 @@
         "^build"
       ],
       "outputs": [
-        ".next/**",
-        "!.next/cache/**",
-        "lib/**"
+        "lib/**",
+        "build/**"
       ]
     },
     "check-types": {

@@ -28,5 +28,5 @@
     "apps/*",
     "packages/*"
   ],
-  "packageManager": "pnpm@10.12.0+sha512.3ab6da6066b7b14d6e9609a31d780191484b8e85f8d0e4581ef333bf4d869799937f5e57cbb8d3da2023019f6d4869a9acc381457fcb1d86e15fc44bfd4eb6a4"
+  "packageManager": "pnpm@10.12.0"
 }
