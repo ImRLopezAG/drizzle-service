@@ -10,7 +10,7 @@ import {
 	lt,
 	lte,
 	ne,
-	sql
+	sql,
 } from 'drizzle-orm'
 import { DrizzleQueryError } from 'drizzle-orm/errors'
 import type { BaseEntity, Handler, ServiceBuilderFn } from './types'
@@ -72,14 +72,9 @@ export function createParserFunction<
 		column: Column<T['$inferSelect'][K]>,
 		value: string,
 	) => SQLWrapper,
-):  (field: K, filterExpr: [string, ...T['$inferSelect'][K][]]) => SQLWrapper {
+): (field: K, filterExpr: [string, ...T['$inferSelect'][K][]]) => SQLWrapper {
 	return (field: K, filterExpr: [string, ...T['$inferSelect'][K][]]) => {
-		return parseFilterExpression(
-			table,
-			handleILike,
-			field,
-			filterExpr,
-		)
+		return parseFilterExpression(table, handleILike, field, filterExpr)
 	}
 }
 
@@ -180,7 +175,6 @@ function parseFilterExpression<
 	// Default to equality
 	return eq(column, values[0])
 }
-
 
 export function sqliteIlike(column: SQLWrapper, value: string): SQLWrapper {
 	return sql`${column} LIKE ${`%${value}%`} COLLATE NOCASE`
