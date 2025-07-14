@@ -71,12 +71,14 @@
     "lint:write": "biome check --write ."
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "tsup": "^8.5.0",
-    "@repo/type-config": "workspace:*"
+    "@repo/type-config": "workspace:*",
+    "tsup": "^8.5.0"
   },
   "peerDependencies": {
-    "typescript": "^5",
-    "drizzle-orm": "^0.44.2"
+    "drizzle-orm": "^0.44.2",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "effect": "^3.16.13"
   }
 }

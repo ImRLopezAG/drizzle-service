@@ -1,31 +1,4 @@
 import {
-  createParserFunction,
-  errorHandler,
-  getTableName,
-  initializeService,
-  tryHandler,
-} from '@/builder'
-import type {
-  BaseEntity,
-  BulkOperationResult,
-  FilterCriteria,
-  Handler,
-  IdType,
-  MutationOperations,
-  MutationsBulkOperations,
-  PaginationResult,
-  PostgresDb,
-  PostgresQb,
-  QueryOperations,
-  QueryOpts,
-  RelationType,
-  Service,
-  ServiceHooks,
-  ServiceMethods,
-  ServiceOptions,
-  WithRelations,
-} from '@builder/types'
-import {
   type SQLWrapper,
   and,
   asc,
@@ -38,8 +11,38 @@ import {
   ne,
   or,
 } from 'drizzle-orm'
+import { Effect } from 'effect'
+import {
+  createDatabaseError,
+  createNotFoundError,
+  createParserFunction,
+  createService,
+  executeHooks,
+  getTableName,
+  handleError,
+  handleOptionalErrorHook,
+  tryEffect,
+  tryHandleError,
+} from '@/builder'
+import type {
+  BulkOperationResult,
+  FilterCriteria,
+  IdType,
+  MutationOperations,
+  MutationsBulkOperations,
+  PaginationResult,
+  PostgresDb,
+  PostgresQb,
+  QueryOperations,
+  QueryOpts,
+  RelationType,
+  Service,
+  ServiceHooks,
+  ServiceMethods,
+  WithRelations,
+} from '@builder/types'
 
-export const createPostgresService = initializeService<PostgresDb>(
+export const createPostgresService = createService<PostgresDb>(
   (db, table, opts) => {
     type D = typeof db
     type T = typeof table
@@ -141,6 +144,7 @@ export const createPostgresService = initializeService<PostgresDb>(
     >(table, (column, value) => {
       return ilike(column, value)
     })
+
     function withSoftDeleted<Q extends PostgresQb>(q: Q, skip = false) {
       if (skip) {
         return q
@@ -195,13 +199,29 @@ export const createPostgresService = initializeService<PostgresDb>(
       return query
     }
 
+    // Helper function to convert Promise-based hooks to Effect-based hooks
+
+    // Helper function to split array into batches
+    function createBatches<T>(array: T[], batchSize: number): T[][] {
+      const batches: T[][] = []
+      for (let i = 0; i < array.length; i += batchSize) {
+        batches.push(array.slice(i, i + batchSize))
+      }
+      return batches
+    }
+
     // ===============================
     // 🚀 REPOSITORY IMPLEMENTATION
     // ===============================
 
     // @ts-ignore
     const createBaseQuery = () => db.select().from(table).$dynamic()
-    async function handleQueries<TResult, TRels extends WithRelations[] = []>(
+
+    // ===============================
+    // 🚀 QUERY OPERATIONS
+    // ===============================
+
+    function handleQueries<TResult, TRels extends WithRelations[] = []>(
       query: PostgresQb,
       queryOpts: QueryOpts<T, TResult, TRels>,
       hooks?: {
@@ -209,131 +229,168 @@ export const createPostgresService = initializeService<PostgresDb>(
         afterParse?: (data: TResult) => TResult
       },
     ) {
-      const { parse, ...opts } = queryOpts
-      const { beforeParse, afterParse } = hooks || {}
-      let q = withOpts(query, opts)
+      return Effect.gen(function* () {
+        const { parse, ...opts } = queryOpts
+        const { beforeParse, afterParse } = hooks || {}
+        let q = withOpts(query, opts)
 
-      if (beforeParse) {
-        // @ts-ignore
-        q = beforeParse(q)
-      }
+        if (beforeParse) {
+          // @ts-ignore
+          q = beforeParse(q)
+        }
 
-      const data = await q
-
-      // Apply custom parse function if provided
-      if (parse) {
-        return parse(
-          opts.relations && opts.relations.length > 0
-            ? (data as RelationType<T, TRels>[])
-            : (data as T['$inferSelect'][]),
-        ) as TResult
-      }
-
-      if (afterParse) {
-        return afterParse(data as TResult)
-      }
-
-      return data as TResult
-    }
-
-    // ===============================
-    // 🚀 REPOSITORY IMPLEMENTATION
-    // ===============================
-
-    // ===============================
-    // 🚀 QUERY OPERATIONS
-    // ===============================
-
-    const _queryOperations: QueryOperations<T, O> = {
-      findAll: async <
-        TRels extends WithRelations[] = [],
-        TResult = TRels['length'] extends 0
-          ? T['$inferSelect'][]
-          : RelationType<T, TRels>[],
-      >(
-        opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
-      ) => {
-        return await handleQueries<TResult, TRels>(createBaseQuery(), opts)
-      },
-
-      findById: async <TResult = T['$inferSelect']>(id: IdType<T, O>) => {
-        const query = withSoftDeleted(createBaseQuery())
-        const idField = getIdField()
-        const result = await query
-          .where(eq(table[idField] as SQLWrapper, id))
-          .limit(1)
-        return (result[0] || null) as TResult | null
-      },
-
-      findWithCursor: async <
-        TRels extends WithRelations[] = [],
-        TResult = TRels['length'] extends 0
-          ? T['$inferSelect'][]
-          : RelationType<T, TRels>[],
-      >(
-        opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
-      ) => {
-        const { parse, ...queryOpts } = opts
-        let data = await withOpts(createBaseQuery(), queryOpts)
-        // Create a new object without relations for count query
-        const { relations: _, ...countOpts } = queryOpts
-        const totalCount = await baseMethods.count(
-          undefined,
-          countOpts as QueryOpts<T, number, []>,
-        )
+        const data = yield* tryEffect(async () => await q)
 
         // Apply custom parse function if provided
         if (parse) {
-          data = parse(
+          return parse(
             opts.relations && opts.relations.length > 0
               ? (data as RelationType<T, TRels>[])
               : (data as T['$inferSelect'][]),
-          ) as unknown as typeof data
+          ) as TResult
         }
 
-        const pageSize = Math.min(opts.limit || defaultLimit, maxLimit)
-        const page = Math.max(0, (opts.page || 1) - 1)
+        if (afterParse) {
+          return afterParse(data as TResult)
+        }
 
-        return {
-          items: data,
-          nextCursor:
-            data.length > 0 ? (data[data.length - 1]?.createdAt ?? null) : null,
-          pagination: {
-            page: page + 1,
-            pageSize,
-            total: totalCount,
-            hasNext: (page + 1) * pageSize < totalCount,
-            hasPrev: page > 0,
-          },
-        } as unknown as PaginationResult<
-          TResult extends T['$inferSelect'][] ? T['$inferSelect'] : TResult
-        >
+        return data as TResult
+      })
+    }
+
+    const _queryOperations: QueryOperations<T, O> = {
+      findAll: <
+        TRels extends WithRelations[] = [],
+        TResult = TRels['length'] extends 0
+          ? T['$inferSelect'][]
+          : RelationType<T, TRels>[],
+      >(
+        opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
+      ) => {
+        return handleError(handleQueries(createBaseQuery(), opts))
       },
 
-      count: async <TRels extends WithRelations[] = []>(
+      findById: <TResult = T['$inferSelect']>(id: IdType<T, O>) => {
+        return handleError(
+          Effect.gen(function* () {
+            const query = withSoftDeleted(createBaseQuery())
+            const idField = getIdField()
+            const result = yield* tryEffect(async () => {
+              const result = await query
+                .where(eq(table[idField] as SQLWrapper, id))
+                .limit(1)
+              return result[0] as TResult | undefined
+            })
+
+            return result || null
+          }),
+        )
+      },
+
+      findWithCursor: <
+        TRels extends WithRelations[] = [],
+        TResult = TRels['length'] extends 0
+          ? T['$inferSelect'][]
+          : RelationType<T, TRels>[],
+      >(
+        opts: QueryOpts<T, TResult, TRels>,
+      ) => {
+        return handleError(
+          Effect.gen(function* () {
+            const { parse, ...queryOpts } = opts
+            let data = yield* tryEffect(
+              async () => await withOpts(createBaseQuery(), queryOpts),
+            )
+            // Create a new object without relations for count query
+            const { relations: _, ...countOpts } = queryOpts
+            const totalCount = yield* tryEffect(async () =>
+              baseMethods.count(
+                undefined,
+                countOpts as QueryOpts<T, number, []>,
+              ),
+            )
+
+            // Apply custom parse function if provided
+            if (parse) {
+              data = parse(
+                opts.relations && opts.relations.length > 0
+                  ? (data as RelationType<T, TRels>[])
+                  : (data as T['$inferSelect'][]),
+              ) as unknown as typeof data
+            }
+
+            const pageSize = Math.min(opts.limit || defaultLimit, maxLimit)
+            const page = Math.max(0, (opts.page || 1) - 1)
+
+            return {
+              items: data,
+              nextCursor:
+                data.length > 0
+                  ? (data[data.length - 1]?.createdAt ?? null)
+                  : null,
+              pagination: {
+                page: page + 1,
+                pageSize,
+                total: totalCount,
+                hasNext: (page + 1) * pageSize < totalCount,
+                hasPrev: page > 0,
+              },
+            } as unknown as PaginationResult<
+              TResult extends T['$inferSelect'][] ? T['$inferSelect'] : TResult
+            >
+          }),
+        )
+      },
+
+      count: <TRels extends WithRelations[] = []>(
         criteria?: Partial<T['$inferSelect']>,
         opts: QueryOpts<T, number, TRels> = {} as QueryOpts<T, number, TRels>,
       ) => {
-        // @ts-ignore
-        let query = db.select({ count: count() }).from(table).$dynamic()
+        return handleError(
+          tryEffect(async () => {
+            //@ts-ignore
+            let query = db.select({ count: count() }).from(table).$dynamic()
 
-        // Apply opts but exclude ordering for count queries
-        const { orderBy: _, ...countOpts } = opts
+            // Apply opts but exclude ordering for count queries
+            const { orderBy: _, ...countOpts } = opts
 
-        query = withOpts(query, countOpts)
-        if (criteria && Object.keys(criteria).length > 0) {
-          const conditions = Object.entries(criteria).map(([key, value]) =>
-            eq(table[key as keyof T['$inferSelect']] as SQLWrapper, value),
-          )
-          query = query.where(and(...conditions))
-        }
-        const [result] = await query.limit(1)
-        if (!result) return 0
+            query = withOpts(query, countOpts)
+            if (criteria && Object.keys(criteria).length > 0) {
+              const conditions = Object.entries(criteria).map(([key, value]) =>
+                eq(table[key as keyof T['$inferSelect']] as SQLWrapper, value),
+              )
+              query = query.where(and(...conditions))
+            }
+            const [result] = await query.limit(1)
+            if (!result) return 0
 
-        return result.count || 0
+            return result.count || 0
+          }),
+        )
       },
 
-      findBy: async <
+      findBy: <
+        TRels extends WithRelations[] = [],
+        TResult = TRels['length'] extends 0
+          ? T['$inferSelect'][]
+          : RelationType<T, TRels>[],
+      >(
+        criteria: Partial<T['$inferSelect']>,
+        opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
+      ) => {
+        const conditions = Object.entries(criteria).map(([key, value]) =>
+          eq(table[key as keyof T['$inferSelect']] as SQLWrapper, value),
+        )
+        return handleError(
+          handleQueries<TResult, TRels>(createBaseQuery(), opts, {
+            beforeParse(q) {
+              return q.where(and(...conditions))
+            },
+          }),
+        )
+      },
+
+      findByMatching: <
         TRels extends WithRelations[] = [],
         TResult = TRels['length'] extends 0
           ? T['$inferSelect'][]
@@ -346,34 +403,16 @@ export const createPostgresService = initializeService<PostgresDb>(
           eq(table[key as keyof T['$inferSelect']] as SQLWrapper, value),
         )
 
-        return await handleQueries<TResult, TRels>(createBaseQuery(), opts, {
-          beforeParse(q) {
-            return q.where(and(...conditions))
-          },
-        })
-      },
-
-      findByMatching: async <
-        TRels extends WithRelations[] = [],
-        TResult = TRels['length'] extends 0
-          ? T['$inferSelect'][]
-          : RelationType<T, TRels>[],
-      >(
-        criteria: Partial<T['$inferSelect']>,
-        opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
-      ) => {
-        const conditions = Object.entries(criteria).map(([key, value]) =>
-          eq(table[key as keyof T['$inferSelect']] as SQLWrapper, value),
+        return handleError(
+          handleQueries<TResult, TRels>(createBaseQuery(), opts, {
+            beforeParse(q) {
+              return q.where(or(...conditions))
+            },
+          }),
         )
-
-        return await handleQueries<TResult, TRels>(createBaseQuery(), opts, {
-          beforeParse(q) {
-            return q.where(or(...conditions))
-          },
-        })
       },
 
-      findByField: async <
+      findByField: <
         K extends keyof T['$inferSelect'],
         TRels extends WithRelations[] = [],
         TResult = TRels['length'] extends 0
@@ -382,15 +421,18 @@ export const createPostgresService = initializeService<PostgresDb>(
       >(
         field: K,
         value: T['$inferSelect'][K],
-        opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
+        opts: QueryOpts<T, TResult, TRels> = {},
       ) => {
-        return await handleQueries<TResult, TRels>(createBaseQuery(), opts, {
-          beforeParse(q) {
-            return q.where(eq(table[field] as SQLWrapper, value))
-          },
-        })
+        return handleError(
+          handleQueries<TResult, TRels>(createBaseQuery(), opts, {
+            beforeParse(q) {
+              return q.where(eq(table[field] as SQLWrapper, value))
+            },
+          }),
+        )
       },
-      filter: async <
+
+      filter: <
         TRels extends WithRelations[] = [],
         TResult = TRels['length'] extends 0
           ? T['$inferSelect'][]
@@ -409,12 +451,14 @@ export const createPostgresService = initializeService<PostgresDb>(
           })
           .filter(Boolean) as SQLWrapper[]
 
-        return await handleQueries<TResult, TRels>(createBaseQuery(), opts, {
-          beforeParse(q) {
-            if (filterConditions.length === 0) return q
-            return q.where(and(...filterConditions))
-          },
-        })
+        return handleError(
+          handleQueries<TResult, TRels>(createBaseQuery(), opts, {
+            beforeParse(q) {
+              if (filterConditions.length === 0) return q
+              return q.where(and(...filterConditions))
+            },
+          }),
+        )
       },
     }
 
@@ -423,204 +467,257 @@ export const createPostgresService = initializeService<PostgresDb>(
     // ===============================
 
     const _mutationOperations: MutationOperations<T, O> = {
-      create: async (
-        data: T['$inferInsert'],
-        hooks?: ServiceHooks<T>,
-      ): Handler<T['$inferSelect']> => {
-        return await tryHandler(
-          async () => {
-            if (hooks?.beforeAction) await hooks.beforeAction(data)
+      create: (data: T['$inferInsert'], hooks?: ServiceHooks<T>) => {
+        return tryHandleError(
+          Effect.gen(function* () {
+            const insertData = {
+              ...data,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }
+            yield* executeHooks(hooks, insertData, 'before')
 
-            const [result] = await db
-              .insert(table)
-              .values({
-                ...data,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              })
-              .returning()
+            const result = yield* tryEffect(async () => {
+              const [result] = await db
+                .insert(table)
+                .values(insertData)
+                .returning()
+                .execute()
+              return result
+            })
 
-            const created = result as T['$inferSelect'] | null
-            if (!created) throw new Error('Failed to create entity')
+            if (!result) {
+              return yield* createDatabaseError(
+                `Failed to create ${entityName}`,
+                {
+                  code: 'SQL_FAILURE',
+                  query: db.insert(table).values(insertData).toSQL(),
+                },
+              )
+            }
+            yield* executeHooks(hooks, result, 'after')
 
-            if (hooks?.afterAction) await hooks.afterAction(created)
-
-            return created
-          },
-          (error) => errorHandler(error),
+            return result
+          }).pipe(
+            Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+          ),
         )
       },
 
-      update: async (
+      update: (
         id: IdType<T, O>,
         data: Partial<Omit<T['$inferInsert'], 'id' | 'createdAt'>>,
         hooks?: ServiceHooks<T>,
-      ): Handler<T['$inferSelect']> => {
-        return await tryHandler(
-          async () => {
-            const prev = await baseMethods.findById(id)
-            if (!prev) throw new Error(`Entity with id ${id} not found`)
-
-            if (hooks?.beforeAction)
-              await hooks.beforeAction({
-                ...prev,
-                ...data,
-              })
-
+      ) => {
+        return tryHandleError(
+          Effect.gen(function* () {
             const idField = getIdField()
-            const [result] = await db
-              .update(table)
-              .set({
-                ...data,
-                updatedAt: new Date(),
-              })
-              .where(eq(table[idField] as SQLWrapper, id))
-              .returning()
+            const entity = yield* tryEffect(
+              async () => await _queryOperations.findById(id),
+            )
 
-            const updated = result as T['$inferSelect'] | null
-            if (!updated) throw new Error(`Entity with id ${id} not found`)
+            if (!entity) {
+              return {
+                success: false,
+                message: `Entity with id ${id} not found`,
+              }
+            }
 
-            if (hooks?.afterAction) await hooks.afterAction(updated)
+            const updateData = {
+              ...data,
+              updatedAt: new Date(),
+            }
+            yield* executeHooks(hooks, updateData, 'before')
 
-            return updated
-          },
-          (error) => errorHandler(error),
+            const result = yield* tryEffect(async () => {
+              const [result] = await db
+                .update(table)
+                .set(updateData)
+                .where(eq(table[idField] as SQLWrapper, id))
+                .returning()
+                .execute()
+
+              return result
+            })
+
+            if (!result) {
+              return yield* createDatabaseError(
+                `Failed to update ${entityName}`,
+                {
+                  code: 'SQL_FAILURE',
+                  query: db
+                    .update(table)
+                    .set(updateData)
+                    .where(eq(table[idField] as SQLWrapper, id))
+                    .toSQL(),
+                },
+              )
+            }
+            yield* executeHooks(hooks, result, 'after')
+            return result
+          }).pipe(
+            Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+          ),
         )
       },
 
-      delete: async (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
-        const [error] = await tryHandler(async () => {
-          const data = await baseMethods.findById(id)
-          if (!data) throw new Error(`Entity with id ${id} not found`)
+      delete: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
+        return handleError(
+          Effect.gen(function* () {
+            const idField = getIdField()
 
-          if (!soft) {
-            throw new Error(
-              `Soft delete is not enabled for the entity: ${entityName}`,
+            if (!soft)
+              return yield* createDatabaseError(
+                `Soft delete is not enabled for ${entityName}`,
+              )
+
+            const { field, deletedValue } = soft
+            const entity = yield* tryEffect(
+              async () => await _queryOperations.findById(id),
             )
-          }
+            if (!entity) {
+              return yield* createNotFoundError(entityName, id)
+            }
 
-          // Check if already soft deleted
-          if (data[soft.field] === soft.deletedValue) {
-            throw new Error(`Entity with id ${id} is already deleted`)
-          }
+            yield* executeHooks(hooks, entity, 'before')
+            const result = yield* tryEffect(async () => {
+              const updated = await db
+                .update(table)
+                .set({ [field]: deletedValue, updatedAt: new Date() } as Record<
+                  string,
+                  unknown
+                >)
+                .where(eq(table[idField] as SQLWrapper, id))
+                .returning()
+                .execute()
 
-          if (hooks?.beforeAction) await hooks.beforeAction(data)
+              if (updated.length === 0) {
+                return new Error(
+                  `Failed to soft delete ${entityName} with id ${id}`,
+                )
+              }
 
-          const idField = getIdField()
-          const [result] = await db
-            .update(table)
-            .set({
-              [soft.field]: soft.deletedValue,
-              updatedAt: new Date(),
-            } as Partial<T['$inferInsert']>)
-            .where(eq(table[idField] as SQLWrapper, id))
-            .returning()
+              return updated[0] as T['$inferSelect']
+            })
 
-          if (!result)
-            throw new Error(`Failed to soft delete entity with id ${id}`)
+            yield* executeHooks(hooks, result, 'after')
 
-          if (hooks?.afterAction) await hooks.afterAction(data)
-
-          return true
-        })
-
-        return {
-          success: !error,
-          message: error
-            ? error.message
-            : `Entity with id ${id} successfully soft deleted`,
-        }
+            return {
+              success: true,
+              message: 'successfully soft deleted',
+            }
+          }).pipe(
+            Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+          ),
+        )
       },
 
-      hardDelete: async (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
-        const [error] = await tryHandler(async () => {
-          const data = await baseMethods.findById(id)
-          if (!data) throw new Error(`Entity with id ${id} not found`)
+      hardDelete: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
+        return handleError(
+          Effect.gen(function* () {
+            const idField = getIdField()
+            const entity = yield* tryEffect(
+              async () => await _queryOperations.findById(id),
+            )
+            if (!entity) {
+              return yield* createNotFoundError(entityName, id)
+            }
 
-          if (hooks?.beforeAction) await hooks.beforeAction(data)
-          const idField = getIdField()
-          await db.delete(table).where(eq(table[idField] as SQLWrapper, id))
-          if (hooks?.afterAction) await hooks.afterAction(data)
+            yield* executeHooks(hooks, entity, 'before')
+            const result = yield* tryEffect(async () => {
+              const [deleted] = await db
+                .delete(table)
+                .where(eq(table[idField] as SQLWrapper, id))
+                .returning()
+                .execute()
 
-          return true
-        })
+              return deleted
+            })
 
-        return {
-          success: !error,
-          message: error
-            ? error.message
-            : `Entity with id ${id} successfully hard deleted`,
-        }
+            if (!result) {
+              return yield* createNotFoundError(entityName, id)
+            }
+            yield* executeHooks(hooks, entity, 'after')
+
+            return {
+              success: true,
+              message: `${entityName} permanently deleted`,
+            }
+          }).pipe(
+            Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+          ),
+        )
       },
 
-      restore: async (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
-        if (!soft) {
-          return {
-            success: false,
-            message: 'Soft delete is not configured for this entity',
-          }
-        }
-
-        const [error] = await tryHandler(async () => {
-          // Find the entity including soft deleted ones
-          const idField = getIdField()
-          const query = createBaseQuery().where(
-            eq(table[idField] as SQLWrapper, id),
-          )
-          // Skip soft delete filtering to find deleted entities
-          const results = await query
-          const data = results[0] as T['$inferSelect'] | undefined
-
-          if (!data) throw new Error(`Entity with id ${id} not found`)
-
-          if (hooks?.beforeAction) await hooks.beforeAction(data)
-
-          const { field, deletedValue, notDeletedValue } = soft
-
-          // Determine the restore value based on field type
-          let restoreValue: unknown
-          if (typeof deletedValue === 'boolean') {
-            // For boolean fields, use opposite of deletedValue if notDeletedValue not specified
-            restoreValue =
-              notDeletedValue !== undefined ? notDeletedValue : !deletedValue
-          } else if (deletedValue === 'NOT_NULL') {
-            // For timestamp fields with special marker, use null or specified notDeletedValue
-            restoreValue =
-              notDeletedValue !== undefined ? notDeletedValue : null
-          } else {
-            // For other types, notDeletedValue is required
-            if (notDeletedValue === undefined) {
-              throw new Error(
+      restore: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
+        return handleError(
+          Effect.gen(function* () {
+            if (!soft)
+              return yield* createDatabaseError(
                 'notDeletedValue is required for non-boolean, non-timestamp soft delete fields',
               )
+
+            const data = yield* tryEffect(
+              async () => await _queryOperations.findById(id),
+            )
+
+            if (!data) {
+              return {
+                success: false,
+                message: `Entity with id ${id} not found`,
+              }
             }
-            restoreValue = notDeletedValue
-          }
 
-          // Update the entity to restore it
-          await db
-            .update(table)
-            .set({
+            yield* executeHooks(hooks, data, 'before')
+
+            const { field, deletedValue, notDeletedValue } = soft
+
+            // Determine the restore value based on field type
+            let restoreValue: unknown
+            if (typeof deletedValue === 'boolean') {
+              // For boolean fields, use opposite of deletedValue if notDeletedValue not specified
+              restoreValue =
+                notDeletedValue !== undefined ? notDeletedValue : !deletedValue
+            } else if (deletedValue === 'NOT_NULL') {
+              // For timestamp fields with special marker, use null or specified notDeletedValue
+              restoreValue =
+                notDeletedValue !== undefined ? notDeletedValue : null
+            } else {
+              // For other types, notDeletedValue is required
+              if (notDeletedValue === undefined) {
+                return yield* createDatabaseError(
+                  'notDeletedValue is required for non-boolean, non-timestamp soft delete fields',
+                )
+              }
+              restoreValue = notDeletedValue
+            }
+
+            const idField = getIdField()
+            yield* tryEffect(async () => {
+              await db
+                .update(table)
+                .set({
+                  [field]: restoreValue,
+                  updatedAt: new Date(),
+                } as Record<string, unknown>)
+                .where(eq(table[idField] as SQLWrapper, id))
+            })
+
+            const restoredData = {
+              ...data,
               [field]: restoreValue,
-              updatedAt: new Date(),
-            } as Record<string, unknown>)
-            .where(eq(table[idField] as SQLWrapper, id))
+            } as T['$inferSelect']
 
-          const restoredData = {
-            ...data,
-            [field]: restoreValue,
-          } as T['$inferSelect']
-          if (hooks?.afterAction) await hooks.afterAction(restoredData)
+            yield* executeHooks(hooks, restoredData, 'after')
 
-          return true
-        })
-
-        return {
-          success: !error,
-          message: error
-            ? error.message
-            : `Entity with id ${id} successfully restored`,
-        }
+            return {
+              success: true,
+              message: `Entity with id ${id} successfully restored`,
+            }
+          }).pipe(
+            Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+          ),
+        )
       },
     }
 
@@ -628,520 +725,534 @@ export const createPostgresService = initializeService<PostgresDb>(
     // 🚀 BULK OPERATIONS
     // ===============================
 
-    // Helper function to split array into batches
-    function createBatches<T>(array: T[], batchSize: number): T[][] {
-      const batches: T[][] = []
-      for (let i = 0; i < array.length; i += batchSize) {
-        batches.push(array.slice(i, i + batchSize))
-      }
-      return batches
-    }
-
     const _bulkOperations: MutationsBulkOperations<T, O> = {
-      bulkCreate: async (
-        data: T['$inferInsert'][],
-        hooks?: ServiceHooks<T> | undefined,
-      ): Promise<BulkOperationResult<T['$inferSelect'][], T>> => {
-        const result: BulkOperationResult<T['$inferSelect'][], T> = {
-          batch: {
-            size: batchSize,
-            processed: 0,
-            failed: 0,
-            errors: [],
-          },
-          data: [],
-        }
-
-        if (data.length === 0) {
-          return result
-        }
-
-        if (hooks?.beforeAction) await hooks.beforeAction(data)
-
-        const batches = createBatches(data, batchSize)
-
-        for (const batch of batches) {
-          try {
-            // Process batch without transaction
-            const batchResult = await db
-              .insert(table)
-              .values(
-                batch.map((item) => ({
-                  ...item,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                })),
-              )
-              .returning()
-
-            result.data.push(...batchResult)
-            result.batch.processed += batch.length
-          } catch (error) {
-            result.batch.failed += batch.length
-            // For create operations, we can't easily identify individual failed records
-            // so we mark the entire batch as failed
-            for (let index = 0; index < batch.length; index++) {
-              result.batch.errors?.push({
-                id: `batch_${batches.indexOf(batch)}_item_${index}` as IdType<
-                  T,
-                  O
-                >,
-                error: error instanceof Error ? error.message : 'Unknown error',
-              })
+      bulkCreate: (data: T['$inferInsert'][], hooks?: ServiceHooks<T>) => {
+        return handleError(
+          Effect.gen(function* () {
+            const result: BulkOperationResult<T['$inferSelect'][], T> = {
+              batch: {
+                size: batchSize,
+                processed: 0,
+                failed: 0,
+                errors: [],
+              },
+              data: [],
             }
-          }
-        }
 
-        if (hooks?.afterAction) await hooks.afterAction(result.data)
+            if (data.length === 0) {
+              return result
+            }
 
-        return result
+            const insertData = data.map((item) => ({
+              ...item,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }))
+
+            yield* executeHooks(hooks, insertData, 'before')
+
+            const batches = createBatches(insertData, batchSize)
+
+            for (const batch of batches) {
+              try {
+                const batchResult = yield* tryEffect(async () => {
+                  return await db
+                    .insert(table)
+                    .values(batch)
+                    .returning()
+                    .execute()
+                })
+
+                result.data.push(...batchResult)
+                result.batch.processed += batch.length
+              } catch (error) {
+                result.batch.failed += batch.length
+                // For create operations, we can't easily identify individual failed records
+                // so we mark the entire batch as failed
+                for (let index = 0; index < batch.length; index++) {
+                  result.batch.errors?.push({
+                    id: `batch_${batches.indexOf(batch)}_item_${index}` as IdType<
+                      T,
+                      O
+                    >,
+                    error:
+                      error instanceof Error ? error.message : 'Unknown error',
+                  })
+                }
+              }
+            }
+
+            yield* executeHooks(hooks, result.data, 'after')
+            return result
+          }).pipe(
+            Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+          ),
+        )
       },
-      bulkUpdate: async (
-        data: {
+
+      bulkUpdate: (
+        data: Array<{
           id: IdType<T, O>
           changes: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>
-        }[],
-        hooks?: ServiceHooks<T> | undefined,
-      ): Promise<BulkOperationResult<T['$inferSelect'][], T>> => {
-        const result: BulkOperationResult<T['$inferSelect'][], T> = {
-          batch: {
-            size: batchSize,
-            processed: 0,
-            failed: 0,
-            errors: [],
-          },
-          data: [],
-        }
+        }>,
+        hooks?: ServiceHooks<T>,
+      ) => {
+        return handleError(
+          Effect.gen(function* () {
+            const result: BulkOperationResult<T['$inferSelect'][], T> = {
+              batch: {
+                size: batchSize,
+                processed: 0,
+                failed: 0,
+                errors: [],
+              },
+              data: [],
+            }
 
-        if (data.length === 0) {
-          return result
-        }
+            if (data.length === 0) {
+              return result
+            }
 
-        if (hooks?.beforeAction) await hooks.beforeAction(data)
+            yield* executeHooks(hooks, data, 'before')
 
-        const batches = createBatches(data, batchSize)
-        const idField = getIdField()
+            const batches = createBatches(data, batchSize)
+            const idField = getIdField()
 
-        for (const batch of batches) {
-          try {
-            // Process batch without transaction - individual updates
-            const updates = []
-            for (const item of batch) {
-              try {
-                const [updated] = await db
-                  .update(table)
-                  .set({
-                    ...item.changes,
-                    updatedAt: new Date(),
+            for (const batch of batches) {
+              for (const item of batch) {
+                try {
+                  const updated = yield* tryEffect(async () => {
+                    const [updated] = await db
+                      .update(table)
+                      .set({
+                        ...item.changes,
+                        updatedAt: new Date(),
+                      })
+                      .where(eq(table[idField] as SQLWrapper, item.id))
+                      .returning()
+
+                    return updated
                   })
-                  .where(eq(table[idField] as SQLWrapper, item.id))
-                  .returning()
 
-                if (updated) {
-                  updates.push(updated)
-                  result.batch.processed += 1
-                } else {
+                  if (updated) {
+                    result.data.push(updated)
+                    result.batch.processed += 1
+                  } else {
+                    result.batch.failed += 1
+                    result.batch.errors?.push({
+                      id: item.id,
+                      error: 'Record not found or not updated',
+                    })
+                  }
+                } catch (itemError) {
                   result.batch.failed += 1
                   result.batch.errors?.push({
                     id: item.id,
-                    error: 'Record not found or not updated',
+                    error:
+                      itemError instanceof Error
+                        ? itemError.message
+                        : 'Unknown error',
                   })
                 }
-              } catch (itemError) {
-                result.batch.failed += 1
+              }
+            }
+
+            yield* executeHooks(hooks, result.data, 'after')
+
+            return result
+          }).pipe(
+            Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+          ),
+        )
+      },
+
+      bulkDelete: (ids: IdType<T, O>[], hooks?: ServiceHooks<T>) => {
+        return handleError(
+          Effect.gen(function* () {
+            const result: BulkOperationResult<
+              { readonly success: boolean; readonly message?: string },
+              T
+            > = {
+              batch: {
+                size: batchSize,
+                processed: 0,
+                failed: 0,
+                errors: [],
+              },
+              data: { success: false },
+            }
+
+            if (ids.length === 0) {
+              result.data = { success: true, message: 'No records to delete' }
+              return result
+            }
+
+            if (!soft) {
+              // If no soft delete configured, add all as errors
+              result.batch.failed = ids.length
+              result.data = {
+                success: false,
+                message: `Soft delete is not enabled for the entity: ${entityName}`,
+              }
+              for (const id of ids) {
                 result.batch.errors?.push({
-                  id: item.id,
+                  id,
+                  error: `Soft delete is not enabled for the entity: ${entityName}`,
+                })
+              }
+              return result
+            }
+
+            if (hooks?.beforeAction) {
+              yield* executeHooks(hooks, ids, 'before')
+            }
+
+            const batches = createBatches(ids, batchSize)
+            const idField = getIdField()
+
+            for (const batch of batches) {
+              try {
+                // First, check which entities exist and are not already deleted
+                const existingData = yield* tryEffect(async () => {
+                  return await createBaseQuery().where(
+                    inArray(table[idField] as SQLWrapper, batch),
+                  )
+                })
+
+                const validIds = existingData
+                  .filter(
+                    (item) =>
+                      item[soft.field as keyof typeof item] !==
+                      soft.deletedValue,
+                  )
+                  .map((item) => item[idField as keyof typeof item])
+
+                if (validIds.length === 0) {
+                  // All records in this batch are invalid
+                  result.batch.failed += batch.length
+                  for (const id of batch) {
+                    result.batch.errors?.push({
+                      id,
+                      error: 'Record not found or already deleted',
+                    })
+                  }
+                  continue
+                }
+
+                // Perform the soft delete
+                const updated = yield* tryEffect(async () => {
+                  return await db
+                    .update(table)
+                    .set({
+                      [soft.field]: soft.deletedValue,
+                      updatedAt: new Date(),
+                    } as Partial<T['$inferInsert']>)
+                    .where(inArray(table[idField] as SQLWrapper, validIds))
+                    .returning()
+                })
+
+                result.batch.processed += updated.length
+
+                // Track failed deletes within the batch
+                if (updated.length < batch.length) {
+                  const failedCount = batch.length - updated.length
+                  result.batch.failed += failedCount
+                }
+              } catch (error) {
+                result.batch.failed += batch.length
+                for (const id of batch) {
+                  result.batch.errors?.push({
+                    id,
+                    error:
+                      error instanceof Error ? error.message : 'Unknown error',
+                  })
+                }
+              }
+            }
+
+            // Set final result data
+            const totalRequested = ids.length
+            const successful = result.batch.processed
+            const failed = result.batch.failed
+
+            if (failed === 0) {
+              result.data = {
+                success: true,
+                message: `Successfully deleted ${successful} records`,
+              }
+            } else if (successful === 0) {
+              result.data = {
+                success: false,
+                message: `Failed to delete all ${totalRequested} records`,
+              }
+            } else {
+              result.data = {
+                success: true,
+                message: `Partially successful: ${successful} deleted, ${failed} failed`,
+              }
+            }
+
+            if (hooks?.afterAction) {
+              yield* executeHooks(hooks, ids, 'after')
+            }
+
+            return result
+          }).pipe(
+            Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+          ),
+        )
+      },
+
+      bulkHardDelete: (ids: IdType<T, O>[], hooks?: ServiceHooks<T>) => {
+        return Effect.gen(function* () {
+          const result: BulkOperationResult<
+            { readonly success: boolean; readonly message?: string },
+            T
+          > = {
+            batch: {
+              size: batchSize,
+              processed: 0,
+              failed: 0,
+              errors: [],
+            },
+            data: { success: false },
+          }
+
+          if (ids.length === 0) {
+            result.data = { success: true, message: 'No records to delete' }
+            return result
+          }
+
+          if (hooks?.beforeAction) {
+            yield* executeHooks(hooks, ids, 'before')
+          }
+
+          const batches = createBatches(ids, batchSize)
+          const idField = getIdField()
+
+          for (const batch of batches) {
+            try {
+              // First, get the entities that will be deleted for hooks
+              const existingData = yield* tryEffect(async () => {
+                return await createBaseQuery().where(
+                  inArray(table[idField] as SQLWrapper, batch),
+                )
+              })
+
+              if (existingData.length === 0) {
+                // All records in this batch are missing
+                result.batch.failed += batch.length
+                for (const id of batch) {
+                  result.batch.errors?.push({
+                    id,
+                    error: 'Record not found',
+                  })
+                }
+                continue
+              }
+
+              // Perform the hard delete
+              yield* tryEffect(async () => {
+                await db
+                  .delete(table)
+                  .where(inArray(table[idField] as SQLWrapper, batch))
+              })
+
+              result.batch.processed += existingData.length
+
+              // Track failed deletes within the batch
+              if (existingData.length < batch.length) {
+                const failedCount = batch.length - existingData.length
+                result.batch.failed += failedCount
+              }
+            } catch (error) {
+              result.batch.failed += batch.length
+              for (const id of batch) {
+                result.batch.errors?.push({
+                  id,
                   error:
-                    itemError instanceof Error
-                      ? itemError.message
-                      : 'Unknown error',
+                    error instanceof Error ? error.message : 'Unknown error',
                 })
               }
             }
-            result.data.push(...updates)
-          } catch (error) {
-            result.batch.failed += batch.length
-            for (const item of batch) {
-              result.batch.errors?.push({
-                id: item.id,
-                error: error instanceof Error ? error.message : 'Unknown error',
-              })
+          }
+
+          // Set final result data
+          const totalRequested = ids.length
+          const successful = result.batch.processed
+          const failed = result.batch.failed
+
+          if (failed === 0) {
+            result.data = {
+              success: true,
+              message: `Successfully hard deleted ${successful} records`,
+            }
+          } else if (successful === 0) {
+            result.data = {
+              success: false,
+              message: `Failed to hard delete all ${totalRequested} records`,
+            }
+          } else {
+            result.data = {
+              success: true,
+              message: `Partially successful: ${successful} hard deleted, ${failed} failed`,
             }
           }
-        }
 
-        if (hooks?.afterAction) await hooks.afterAction(result.data)
+          if (hooks?.afterAction) {
+            yield* executeHooks(hooks, ids, 'after')
+          }
 
-        return result
+          return result
+        }).pipe(
+          Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+          Effect.runPromise,
+        )
       },
-      bulkDelete: async (
-        ids: IdType<T, O>[],
-        hooks?: ServiceHooks<T> | undefined,
-      ): Promise<
-        BulkOperationResult<
-          { readonly success: boolean; readonly message?: string },
-          T
-        >
-      > => {
-        const result: BulkOperationResult<
-          { readonly success: boolean; readonly message?: string },
-          T
-        > = {
-          batch: {
-            size: batchSize,
-            processed: 0,
-            failed: 0,
-            errors: [],
-          },
-          data: { success: false },
-        }
 
-        if (ids.length === 0) {
-          result.data = { success: true, message: 'No records to delete' }
-          return result
-        }
-
-        if (!soft) {
-          // If no soft delete configured, add all as errors
-          result.batch.failed = ids.length
-          result.data = {
-            success: false,
-            message: `Soft delete is not enabled for the entity: ${entityName}`,
+      bulkRestore: (ids: IdType<T, O>[], hooks?: ServiceHooks<T>) => {
+        return Effect.gen(function* () {
+          const result: BulkOperationResult<
+            { readonly success: boolean; readonly message?: string },
+            T
+          > = {
+            batch: {
+              size: batchSize,
+              processed: 0,
+              failed: 0,
+              errors: [],
+            },
+            data: { success: false },
           }
-          for (const id of ids) {
-            result.batch.errors?.push({
-              id,
-              error: `Soft delete is not enabled for the entity: ${entityName}`,
-            })
+
+          if (ids.length === 0) {
+            result.data = { success: true, message: 'No records to restore' }
+            return result
           }
-          return result
-        }
 
-        if (hooks?.beforeAction) await hooks.beforeAction(ids)
+          if (!soft) {
+            // If no soft delete configured, add all as errors
+            result.batch.failed = ids.length
+            result.data = {
+              success: false,
+              message: `Soft delete is not enabled for the entity: ${entityName}`,
+            }
+            for (const id of ids) {
+              result.batch.errors?.push({
+                id,
+                error: `Soft delete is not enabled for the entity: ${entityName}`,
+              })
+            }
+            return result
+          }
 
-        const batches = createBatches(ids, batchSize)
-        const idField = getIdField()
+          if (hooks?.beforeAction) {
+            yield* executeHooks(hooks, ids, 'before')
+          }
 
-        for (const batch of batches) {
-          try {
-            // Process batch without transaction
-            // First, check which entities exist and are not already deleted
-            const existingData = await createBaseQuery().where(
-              inArray(table[idField] as SQLWrapper, batch),
-            )
+          const batches = createBatches(ids, batchSize)
+          const idField = getIdField()
 
-            const validIds = existingData
-              .filter(
-                (item) =>
-                  item[soft.field as keyof typeof item] !== soft.deletedValue,
+          for (const batch of batches) {
+            try {
+              // First, check which entities exist and are currently deleted
+              const existingData = yield* tryEffect(async () => {
+                return await createBaseQuery().where(
+                  and(
+                    inArray(table[idField] as SQLWrapper, batch),
+                    eq(
+                      table[soft.field as keyof T] as SQLWrapper,
+                      soft.deletedValue,
+                    ),
+                  ),
+                )
+              })
+
+              const validIds = existingData.map(
+                (item) => item[idField as keyof typeof item],
               )
-              .map((item) => item[idField as keyof typeof item])
 
-            if (validIds.length === 0) {
-              // All records in this batch are invalid
+              if (validIds.length === 0) {
+                // All records in this batch are invalid (not found or not deleted)
+                result.batch.failed += batch.length
+                for (const id of batch) {
+                  result.batch.errors?.push({
+                    id,
+                    error: 'Record not found or not deleted',
+                  })
+                }
+                continue
+              }
+
+              // Perform the restore (set soft delete field to notDeletedValue)
+              const restoreValue =
+                soft.notDeletedValue !== undefined
+                  ? soft.notDeletedValue
+                  : typeof soft.deletedValue === 'boolean'
+                    ? !soft.deletedValue
+                    : null
+
+              const updated = yield* tryEffect(async () => {
+                return await db
+                  .update(table)
+                  .set({
+                    [soft.field]: restoreValue,
+                    updatedAt: new Date(),
+                  } as Partial<T['$inferInsert']>)
+                  .where(inArray(table[idField] as SQLWrapper, validIds))
+                  .returning()
+              })
+
+              result.batch.processed += updated.length
+
+              // Track failed restores within the batch
+              if (updated.length < batch.length) {
+                const failedCount = batch.length - updated.length
+                result.batch.failed += failedCount
+              }
+            } catch (error) {
               result.batch.failed += batch.length
               for (const id of batch) {
                 result.batch.errors?.push({
                   id,
-                  error: 'Record not found or already deleted',
+                  error:
+                    error instanceof Error ? error.message : 'Unknown error',
                 })
               }
-              continue
-            }
-
-            // Perform the soft delete
-            const updated = await db
-              .update(table)
-              .set({
-                [soft.field]: soft.deletedValue,
-                updatedAt: new Date(),
-              } as Partial<T['$inferInsert']>)
-              .where(inArray(table[idField] as SQLWrapper, validIds))
-              .returning()
-
-            result.batch.processed += updated.length
-
-            // Track failed deletes within the batch
-            if (updated.length < batch.length) {
-              const failedCount = batch.length - updated.length
-              result.batch.failed += failedCount
-            }
-          } catch (error) {
-            result.batch.failed += batch.length
-            for (const id of batch) {
-              result.batch.errors?.push({
-                id,
-                error: error instanceof Error ? error.message : 'Unknown error',
-              })
             }
           }
-        }
 
-        // Set final result data
-        const totalRequested = ids.length
-        const successful = result.batch.processed
-        const failed = result.batch.failed
+          // Set final result data
+          const totalRequested = ids.length
+          const successful = result.batch.processed
+          const failed = result.batch.failed
 
-        if (failed === 0) {
-          result.data = {
-            success: true,
-            message: `Successfully deleted ${successful} records`,
+          if (failed === 0) {
+            result.data = {
+              success: true,
+              message: `Successfully restored ${successful} records`,
+            }
+          } else if (successful === 0) {
+            result.data = {
+              success: false,
+              message: `Failed to restore all ${totalRequested} records`,
+            }
+          } else {
+            result.data = {
+              success: true,
+              message: `Partially successful: ${successful} restored, ${failed} failed`,
+            }
           }
-        } else if (successful === 0) {
-          result.data = {
-            success: false,
-            message: `Failed to delete all ${totalRequested} records`,
+
+          if (hooks?.afterAction) {
+            yield* executeHooks(hooks, ids, 'after')
           }
-        } else {
-          result.data = {
-            success: true,
-            message: `Partially successful: ${successful} deleted, ${failed} failed`,
-          }
-        }
 
-        if (hooks?.afterAction) await hooks.afterAction(ids)
-
-        return result
-      },
-      bulkHardDelete: async (
-        ids: IdType<T, O>[],
-        hooks?: ServiceHooks<T> | undefined,
-      ): Promise<
-        BulkOperationResult<
-          { readonly success: boolean; readonly message?: string },
-          T
-        >
-      > => {
-        const result: BulkOperationResult<
-          { readonly success: boolean; readonly message?: string },
-          T
-        > = {
-          batch: {
-            size: batchSize,
-            processed: 0,
-            failed: 0,
-            errors: [],
-          },
-          data: { success: false },
-        }
-
-        if (ids.length === 0) {
-          result.data = { success: true, message: 'No records to delete' }
           return result
-        }
-
-        if (hooks?.beforeAction) await hooks.beforeAction(ids)
-
-        const batches = createBatches(ids, batchSize)
-        const idField = getIdField()
-
-        for (const batch of batches) {
-          try {
-            // Process batch without transaction
-            // First, get the entities that will be deleted for hooks
-            const existingData = await createBaseQuery().where(
-              inArray(table[idField] as SQLWrapper, batch),
-            )
-
-            if (existingData.length === 0) {
-              // All records in this batch are missing
-              result.batch.failed += batch.length
-              for (const id of batch) {
-                result.batch.errors?.push({
-                  id,
-                  error: 'Record not found',
-                })
-              }
-              continue
-            }
-
-            // Perform the hard delete
-            await db
-              .delete(table)
-              .where(inArray(table[idField] as SQLWrapper, batch))
-
-            result.batch.processed += existingData.length
-
-            // Track failed deletes within the batch
-            if (existingData.length < batch.length) {
-              const failedCount = batch.length - existingData.length
-              result.batch.failed += failedCount
-            }
-          } catch (error) {
-            result.batch.failed += batch.length
-            for (const id of batch) {
-              result.batch.errors?.push({
-                id,
-                error: error instanceof Error ? error.message : 'Unknown error',
-              })
-            }
-          }
-        }
-
-        // Set final result data
-        const totalRequested = ids.length
-        const successful = result.batch.processed
-        const failed = result.batch.failed
-
-        if (failed === 0) {
-          result.data = {
-            success: true,
-            message: `Successfully hard deleted ${successful} records`,
-          }
-        } else if (successful === 0) {
-          result.data = {
-            success: false,
-            message: `Failed to hard delete all ${totalRequested} records`,
-          }
-        } else {
-          result.data = {
-            success: true,
-            message: `Partially successful: ${successful} hard deleted, ${failed} failed`,
-          }
-        }
-
-        if (hooks?.afterAction) await hooks.afterAction(ids)
-
-        return result
-      },
-      bulkRestore: async (
-        ids: IdType<T, O>[],
-        hooks?: ServiceHooks<T> | undefined,
-      ): Promise<
-        BulkOperationResult<
-          { readonly success: boolean; readonly message?: string },
-          T
-        >
-      > => {
-        const result: BulkOperationResult<
-          { readonly success: boolean; readonly message?: string },
-          T
-        > = {
-          batch: {
-            size: batchSize,
-            processed: 0,
-            failed: 0,
-            errors: [],
-          },
-          data: { success: false },
-        }
-
-        if (ids.length === 0) {
-          result.data = { success: true, message: 'No records to restore' }
-          return result
-        }
-
-        if (!soft) {
-          // If no soft delete configured, add all as errors
-          result.batch.failed = ids.length
-          result.data = {
-            success: false,
-            message: `Soft delete is not enabled for the entity: ${entityName}`,
-          }
-          for (const id of ids) {
-            result.batch.errors?.push({
-              id,
-              error: `Soft delete is not enabled for the entity: ${entityName}`,
-            })
-          }
-          return result
-        }
-
-        if (hooks?.beforeAction) await hooks.beforeAction(ids)
-
-        const batches = createBatches(ids, batchSize)
-        const idField = getIdField()
-
-        for (const batch of batches) {
-          try {
-            // Process batch without transaction
-            // First, check which entities exist and are currently deleted
-            const existingData = await createBaseQuery().where(
-              and(
-                inArray(table[idField] as SQLWrapper, batch),
-                eq(
-                  table[soft.field as keyof T] as SQLWrapper,
-                  soft.deletedValue,
-                ),
-              ),
-            )
-
-            const validIds = existingData.map(
-              (item) => item[idField as keyof typeof item],
-            )
-
-            if (validIds.length === 0) {
-              // All records in this batch are invalid (not found or not deleted)
-              result.batch.failed += batch.length
-              for (const id of batch) {
-                result.batch.errors?.push({
-                  id,
-                  error: 'Record not found or not deleted',
-                })
-              }
-              continue
-            }
-
-            // Perform the restore (set soft delete field to notDeletedValue)
-            const restoreValue =
-              soft.notDeletedValue !== undefined
-                ? soft.notDeletedValue
-                : typeof soft.deletedValue === 'boolean'
-                  ? !soft.deletedValue
-                  : null
-
-            const updated = await db
-              .update(table)
-              .set({
-                [soft.field]: restoreValue,
-                updatedAt: new Date(),
-              } as Partial<T['$inferInsert']>)
-              .where(inArray(table[idField] as SQLWrapper, validIds))
-              .returning()
-
-            result.batch.processed += updated.length
-
-            // Track failed restores within the batch
-            if (updated.length < batch.length) {
-              const failedCount = batch.length - updated.length
-              result.batch.failed += failedCount
-            }
-          } catch (error) {
-            result.batch.failed += batch.length
-            for (const id of batch) {
-              result.batch.errors?.push({
-                id,
-                error: error instanceof Error ? error.message : 'Unknown error',
-              })
-            }
-          }
-        }
-
-        // Set final result data
-        const totalRequested = ids.length
-        const successful = result.batch.processed
-        const failed = result.batch.failed
-
-        if (failed === 0) {
-          result.data = {
-            success: true,
-            message: `Successfully restored ${successful} records`,
-          }
-        } else if (successful === 0) {
-          result.data = {
-            success: false,
-            message: `Failed to restore all ${totalRequested} records`,
-          }
-        } else {
-          result.data = {
-            success: true,
-            message: `Partially successful: ${successful} restored, ${failed} failed`,
-          }
-        }
-
-        if (hooks?.afterAction) await hooks.afterAction(ids)
-
-        return result
+        }).pipe(
+          Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+          Effect.runPromise,
+        )
       },
     }
 
@@ -1156,7 +1267,7 @@ export const createPostgresService = initializeService<PostgresDb>(
       ...(override ? override(baseMethods) : {}),
     }
 
-    const service: Service<T, D> = {
+    const repository: Service<T, D> = {
       ...baseService,
       _: baseMethods,
       entityName: entityName,
@@ -1165,28 +1276,8 @@ export const createPostgresService = initializeService<PostgresDb>(
     }
 
     return {
-      ...service,
+      ...repository,
       ...rest,
     } as Service<T, D> & O
   },
 )
-
-export function drizzleService<D extends PostgresDb>(
-  db: D,
-): <
-  T extends BaseEntity,
-  TExtensions extends Record<string, unknown> = Record<string, unknown>,
->(
-  table: T,
-  opts?: ServiceOptions<T, TExtensions>,
-) => Service<T, D> & TExtensions {
-  return <
-    T extends BaseEntity,
-    TExtensions extends Record<string, unknown> = Record<string, unknown>,
-  >(
-    table: T,
-    opts?: ServiceOptions<T, TExtensions>,
-  ) => createPostgresService(db, table, opts) as Service<T, D> & TExtensions
-}
-
-// Helper function to parse Business Central filter expressions

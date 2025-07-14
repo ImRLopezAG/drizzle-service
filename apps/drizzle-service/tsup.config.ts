@@ -16,7 +16,6 @@ export default defineConfig({
 	dts: true,
 	keepNames: true,
 	minifySyntax: true,
-	sourcemap: false,
 	treeshake: true,
 	external: ['drizzle-orm'],
 	minifyIdentifiers: true,

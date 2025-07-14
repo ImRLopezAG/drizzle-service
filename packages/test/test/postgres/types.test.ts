@@ -13,7 +13,9 @@ import { describe, expectTypeOf, it } from 'vitest'
 import { service, todos, users } from './schema'
 
 // Service instances for type testing
-const userService = service(users)
+const userService = service(users, {
+	id: 'id',
+})
 const todosService = service(todos, {
 	soft: {
 		field: 'status',
@@ -296,10 +298,10 @@ describe('PostgreSQL Service Types', () => {
 			type TodoHandler = Handler<TodoSelect>
 
 			expectTypeOf<UserHandler>().toEqualTypeOf<
-				Promise<[Error, null] | [null, UserSelect]>
+				Handler<UserSelect>
 			>()
 			expectTypeOf<TodoHandler>().toEqualTypeOf<
-				Promise<[Error, null] | [null, TodoSelect]>
+				Handler<TodoSelect>
 			>()
 		})
 	})

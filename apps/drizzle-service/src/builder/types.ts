@@ -2,7 +2,6 @@ import type { Column, SQL, Table } from 'drizzle-orm'
 import type { MySqlDatabase, MySqlSelect } from 'drizzle-orm/mysql-core'
 import type { PgDatabase, PgSelect } from 'drizzle-orm/pg-core'
 import type { BaseSQLiteDatabase, SQLiteSelect } from 'drizzle-orm/sqlite-core'
-
 // Base entity interface that all tables must implement
 export interface BaseEntity extends Table {
 	// Optional ID field - repositories must specify the ID field if not present
@@ -27,60 +26,61 @@ export type SQLiteQb = SQLiteSelect
 export type PostgresQb = PgSelect
 export type MySqlQb = MySqlSelect
 
-// Special marker type for timestamp-based soft deletes
-export type SoftDeleteTimestampMarker = 'NOT_NULL'
+export type Handler<T> = Promise<[ServiceError, null] | [null, T]>
 
-// Soft delete configuration with type-safe constraints
-type SoftDeleteConfig<
-	T extends BaseEntity,
-	K extends keyof T['$inferSelect'],
-> = {
-	readonly field: K
-} & (T['$inferSelect'][K] extends boolean // For boolean fields: deletedValue is required, notDeletedValue is optional (defaults to opposite)
-	? {
-			readonly deletedValue: boolean
-			readonly notDeletedValue?: boolean
-		}
-	: // For timestamp fields - match exact Date type but exclude Date | null from this branch
-		[T['$inferSelect'][K]] extends [Date]
-		? {
-				readonly deletedValue: Date | SoftDeleteTimestampMarker
-				readonly notDeletedValue?: Date | null
-			}
-		: // For nullable timestamp fields (Date | null)
-			T['$inferSelect'][K] extends Date | null
-			? {
-					readonly deletedValue: Date | SoftDeleteTimestampMarker | null
-					readonly notDeletedValue?: Date | null
-				}
-			: // For all other types (enums, strings, etc): both values are required
-				{
-					readonly deletedValue: T['$inferSelect'][K]
-					readonly notDeletedValue: T['$inferSelect'][K]
-				})
+// Effect-specific error types
+export class DatabaseError extends Error {
+	readonly _tag = 'DatabaseError'
+	constructor(
+		message: string,
+		public override readonly cause?: unknown,
+	) {
+		super(message)
+	}
+}
 
-// Helper type to properly distribute the union for soft delete config
-type SoftDeleteOption<T extends BaseEntity> = {
-	[K in keyof T['$inferSelect']]: SoftDeleteConfig<T, K>
-}[keyof T['$inferSelect']]
+export class ValidationError extends Error {
+	readonly _tag = 'ValidationError'
+	constructor(
+		message: string,
+		readonly field?: string,
+	) {
+		super(message)
+	}
+}
+
+export class NotFoundError extends Error {
+	readonly _tag = 'NotFoundError'
+	constructor(
+		message: string,
+		readonly entityType?: string,
+		readonly id?: unknown,
+	) {
+		super(message)
+	}
+}
+
+export type ServiceError = DatabaseError | ValidationError | NotFoundError
 
 export type ServiceOptions<
-	T extends BaseEntity,
-	TExtensions = Record<string, unknown>,
+    T extends BaseEntity,
+    TExtensions = Record<string, unknown>,
 > = {
-	readonly defaultLimit?: number
-	readonly maxLimit?: number
-	readonly soft?: SoftDeleteOption<T>
-	readonly batchSize?: number
-	override?: (baseMethods: ServiceMethods<T>) => Partial<ServiceMethods<T>>
-} & (T['$inferSelect'] extends { id: string }
-	? {
-			id?: keyof T['$inferSelect'] // Optional if entity has an ID field
-		}
-	: {
-			id: keyof T['$inferSelect'] // Required if entity doesn't have an ID field
-		}) &
-	TExtensions
+    readonly defaultLimit?: number
+    readonly maxLimit?: number
+    readonly soft?: SoftDeleteOption<T>
+    readonly batchSize?: number
+    override?: (
+        baseMethods: ServiceMethods<T>,
+    ) => Partial<ServiceMethods<T>>
+} & (
+    // If the entity has an id field of type string, id is optional and must be a string key
+    T['$inferSelect'] extends { id: infer IdType }
+        ? IdType extends string
+            ? { id?: Extract<keyof T['$inferSelect'], string> }
+            : { id: Extract<keyof T['$inferSelect'], string> }
+        : { id: Extract<keyof T['$inferSelect'], string> }
+) & TExtensions
 
 // Query options that work with any entity
 export type QueryOpts<
@@ -112,9 +112,6 @@ export interface WithRelations {
 	sql: SQL
 }
 
-// Handler type for error handling
-export type Handler<T> = Promise<[Error, null] | [null, T]>
-
 // Pagination result
 export interface PaginationResult<T> {
 	readonly items: readonly T[]
@@ -128,105 +125,48 @@ export interface PaginationResult<T> {
 	}
 }
 
-// Service hooks for lifecycle events
+// Service hooks for lifecycle events - using Effect
 export interface ServiceHooks<T extends BaseEntity> {
-	beforeAction?: (data: T['$inferSelect']) => Promise<void>
-	afterAction?: (data: T['$inferSelect']) => Promise<void>
-	onError?: (error: Error) => Promise<void>
+	beforeAction?: (
+		data: T['$inferSelect'],
+	) => Promise<void>
+	afterAction?: (
+		data: T['$inferSelect'],
+	) => Promise<void>
+	onError?: (error: ServiceError) => Promise<void>
 }
 
-/**
- * Interface defining mutation operations for service entities.
- *
- * @template T - The base entity type that extends BaseEntity
- * @template TOpts - Optional service options that extend ServiceOptions<T>
- */
 export interface MutationOperations<
 	T extends BaseEntity,
 	TOpts extends ServiceOptions<T> | undefined = undefined,
 > {
-	/**
-	 * Creates a new entity in the service.
-	 *
-	 * @param data - The data to insert, conforming to the entity's insert schema
-	 * @param hooks - Optional service hooks to execute during creation
-	 * @param validate - Optional validation function to run on the data before creation
-	 * @returns A handler that resolves to the created entity's select schema
-	 */
 	create: (
 		data: T['$inferInsert'],
 		hooks?: ServiceHooks<T>,
 	) => Handler<T['$inferSelect']>
-
-	/**
-	 * Updates an existing entity in the service.
-	 *
-	 * @param id - The identifier of the entity to update
-	 * @param data - Partial data to update, excluding createdAt and id fields
-	 * @param hooks - Optional service hooks to execute during update
-	 * @param validate - Optional validation function to run on the partial data before update
-	 * @returns A handler that resolves to the updated entity's select schema
-	 */
 	update: (
 		id: IdType<T, TOpts>,
 		data: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>,
 		hooks?: ServiceHooks<T>,
 	) => Handler<T['$inferSelect']>
-	/**
-	 * Performs a soft delete on an entity (typically marks as deleted without removing from database).
-	 *
-	 * @param id - The identifier of the entity to soft delete
-	 * @param hooks - Optional service hooks to execute during deletion
-	 * @returns A promise that resolves to an object indicating success status and optional message
-	 */
 	delete: (
 		id: IdType<T, TOpts>,
 		hooks?: ServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
-
-	/**
-	 * Performs a hard delete on an entity (permanently removes from database).
-	 *
-	 * @param id - The identifier of the entity to permanently delete
-	 * @param hooks - Optional service hooks to execute during hard deletion
-	 * @returns A promise that resolves to an object indicating success status and optional message
-	 */
 	hardDelete: (
 		id: IdType<T, TOpts>,
 		hooks?: ServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
-
-	/**
-	 * Performs a restore operation on a soft-deleted entity (typically marks as not deleted).
-	 * @param id - The identifier of the entity to restore
-	 * @param hooks - Optional service hooks to execute during restoration
-	 * @returns A promise that resolves to an object indicating success status and optional message
-	 */
 	restore: (
 		id: IdType<T, TOpts>,
 		hooks?: ServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
 }
 
-/**
- * Interface defining query operations for a service pattern.
- * Provides a comprehensive set of methods for retrieving data from a data source.
- *
- * @template T - The base entity type that extends BaseEntity
- * @template TOpts - Service options type, defaults to undefined
- */
 export interface QueryOperations<
 	T extends BaseEntity,
 	TOpts extends ServiceOptions<T> | undefined = undefined,
 > {
-	/**
-	 * Retrieves all entities from the data source.
-	 *
-	 * @template TRels - Array of relation types to include
-	 * @template TResult - The resulting type based on whether relations are included
-	 * @param opts - Optional query options for filtering, sorting, and including relations
-	 * @returns Promise resolving to an array of entities
-	 */
 	findAll: <
 		TRels extends WithRelations[] = [],
 		TResult = TRels['length'] extends 0
@@ -235,27 +175,9 @@ export interface QueryOperations<
 	>(
 		opts?: QueryOpts<T, TResult, TRels>,
 	) => Promise<TResult>
-
-	/**
-	 * Finds a single entity by its unique identifier.
-	 *
-	 * @template TResult - The resulting entity type
-	 * @param id - The unique identifier of the entity
-	 * @returns Promise resolving to the entity or null if not found
-	 */
 	findById: <TResult = T['$inferSelect']>(
 		id: IdType<T, TOpts>,
 	) => Promise<TResult | null>
-
-	/**
-	 * Finds entities that match the specified criteria using partial matching.
-	 *
-	 * @template TRels - Array of relation types to include
-	 * @template TResult - The resulting type based on whether relations are included
-	 * @param criteria - Partial entity object containing the search criteria
-	 * @param opts - Optional query options for filtering, sorting, and including relations
-	 * @returns Promise resolving to an array of matching entities
-	 */
 	findBy: <
 		TRels extends WithRelations[] = [],
 		TResult = TRels['length'] extends 0
@@ -265,16 +187,6 @@ export interface QueryOperations<
 		criteria: Partial<T['$inferSelect']>,
 		opts?: QueryOpts<T, TResult, TRels>,
 	) => Promise<TResult>
-
-	/**
-	 * Finds entities that exactly match the specified criteria.
-	 *
-	 * @template TRels - Array of relation types to include
-	 * @template TResult - The resulting type based on whether relations are included
-	 * @param criteria - Partial entity object containing the exact match criteria
-	 * @param opts - Optional query options for filtering, sorting, and including relations
-	 * @returns Promise resolving to an array of exactly matching entities
-	 */
 	findByMatching: <
 		TRels extends WithRelations[] = [],
 		TResult = TRels['length'] extends 0
@@ -284,18 +196,6 @@ export interface QueryOperations<
 		criteria: Partial<T['$inferSelect']>,
 		opts?: QueryOpts<T, TResult, TRels>,
 	) => Promise<TResult>
-
-	/**
-	 * Finds entities by a specific field and its value.
-	 *
-	 * @template K - The key of the entity field to search by
-	 * @template TRels - Array of relation types to include
-	 * @template TResult - The resulting type based on whether relations are included
-	 * @param field - The field name to search by
-	 * @param value - The value to match against the specified field
-	 * @param opts - Optional query options for filtering, sorting, and including relations
-	 * @returns Promise resolving to an array of entities matching the field criteria
-	 */
 	findByField: <
 		K extends keyof T['$inferSelect'],
 		TRels extends WithRelations[] = [],
@@ -307,28 +207,10 @@ export interface QueryOperations<
 		value: T['$inferSelect'][K],
 		opts?: QueryOpts<T, TResult, TRels>,
 	) => Promise<TResult>
-
-	/**
-	 * Counts the number of entities that match the specified criteria.
-	 *
-	 * @param criteria - Optional partial entity object containing the search criteria
-	 * @param opts - Optional query options for additional filtering
-	 * @returns Promise resolving to the count of matching entities
-	 */
 	count: (
 		criteria?: Partial<T['$inferSelect']>,
 		opts?: QueryOpts<T, number>,
 	) => Promise<number>
-
-	/**
-	 * Performs cursor-based pagination to retrieve entities.
-	 * Useful for efficient pagination through large datasets.
-	 *
-	 * @template TRels - Array of relation types to include
-	 * @template TResult - The resulting type based on whether relations are included
-	 * @param opts - Query options including cursor information for pagination
-	 * @returns Promise resolving to a paginated result containing entities and pagination metadata
-	 */
 	findWithCursor: <
 		TRels extends WithRelations[] = [],
 		TResult = TRels['length'] extends 0
@@ -341,26 +223,6 @@ export interface QueryOperations<
 			TResult extends T['$inferSelect'][] ? T['$inferSelect'] : TResult
 		>
 	>
-
-	/**
-	 * Performs advanced filtering using Business Central style filter expressions.
-	 * Supports operators like ranges (..), wildcards (*), comparisons (<, >, <=, >=, <>),
-	 * logical operators (&, |), and case-insensitive matching (@).
-	 *
-	 * Filter expression format: [filterExpression, ...values]
-	 * Examples:
-	 * - Range: ['%1..%2', 1000, 5000] // Between 1000 and 5000
-	 * - Wildcard: ['*%1*', 'search'] // Contains 'search'
-	 * - Multiple values: ['%1|%2|%3', 'A', 'B', 'C'] // Equals A, B, or C
-	 * - Comparison: ['>%1', 100] // Greater than 100
-	 * - Case insensitive: ['@*%1*', 'Search'] // Contains 'Search' (case insensitive)
-	 *
-	 * @template TRels - Array of relation types to include
-	 * @template TResult - The resulting type based on whether relations are included
-	 * @param criteria - Object mapping field names to filter expressions
-	 * @param opts - Optional query options for additional filtering, sorting, and including relations
-	 * @returns Promise resolving to an array of entities matching the filter criteria
-	 */
 	filter: <
 		TRels extends WithRelations[] = [],
 		TResult = TRels['length'] extends 0
@@ -437,10 +299,67 @@ export interface Service<
 	DB,
 	TOpts extends ServiceOptions<T> | undefined = undefined,
 > extends ServiceMethods<T, TOpts> {
+	readonly _: ServiceMethods<T, TOpts>
+	readonly entityName: string
 	readonly db: DB
 	readonly entity: T
-	readonly entityName: string
-	_: ServiceMethods<T, TOpts>
+}
+
+// Special marker type for timestamp-based soft deletes
+export type SoftDeleteTimestampMarker = 'NOT_NULL'
+
+// Soft delete configuration with type-safe constraints
+type SoftDeleteConfig<
+	T extends BaseEntity,
+	K extends keyof T['$inferSelect'],
+> = {
+	readonly field: K
+} & (T['$inferSelect'][K] extends boolean // For boolean fields: deletedValue is required, notDeletedValue is optional (defaults to opposite)
+	? {
+			readonly deletedValue: boolean
+			readonly notDeletedValue?: boolean
+		}
+	: // For timestamp fields - match exact Date type but exclude Date | null from this branch
+		[T['$inferSelect'][K]] extends [Date]
+		? {
+				readonly deletedValue: Date | SoftDeleteTimestampMarker
+				readonly notDeletedValue?: Date | null
+			}
+		: // For nullable timestamp fields (Date | null)
+			T['$inferSelect'][K] extends Date | null
+			? {
+					readonly deletedValue: Date | SoftDeleteTimestampMarker | null
+					readonly notDeletedValue?: Date | null
+				}
+			: // For all other types (enums, strings, etc): both values are required
+				{
+					readonly deletedValue: T['$inferSelect'][K]
+					readonly notDeletedValue: T['$inferSelect'][K]
+				})
+
+// Helper type to properly distribute the union for soft delete config
+type SoftDeleteOption<T extends BaseEntity> = {
+	[K in keyof T['$inferSelect']]: SoftDeleteConfig<T, K>
+}[keyof T['$inferSelect']]
+
+// Filter configuration for Business Central style filtering
+export type FilterExpression<T> = [string, ...T[]]
+
+export type FilterCriteria<T extends BaseEntity> = {
+	[K in keyof T['$inferSelect']]?: FilterExpression<T['$inferSelect'][K]>
+}
+
+export interface BulkOperationResult<T, E extends BaseEntity> {
+	batch: {
+		size: number
+		processed: number
+		failed: number
+		errors?: Array<{
+			id: IdType<E>
+			error: string
+		}>
+	}
+	data: T
 }
 
 // Service builder function that each database adapter implements
@@ -453,7 +372,7 @@ export type ServiceBuilderFn<DB> = <
 	opts?: ServiceOptions<T, TExtensions>,
 ) => Service<T, DB> & TExtensions
 
-// Main builder function signature - creates the service factory
+// Main builder function signature - creates the repository factory
 export type CreateServiceBuilder = <DB>(
 	builderFn: ServiceBuilderFn<DB>,
 ) => ServiceBuilderFn<DB>
@@ -483,28 +402,10 @@ export type IdType<
 	TOpts extends { id?: keyof T['$inferSelect'] } | undefined = undefined,
 > = TOpts extends { id: infer IdField }
 	? IdField extends keyof T['$inferSelect']
-		? T['$inferSelect'][IdField] // Use the type from the specified ID field in options
-		: never // Error case: the specified ID field doesn't exist
+		? T['$inferSelect'][IdField]
+		: never
 	: T['$inferSelect'] extends { id: infer IdType }
-		? IdType // Use the entity's native ID field type
-		: string // Default to string if no ID field exists
+		? IdType
+		: string
 
-// Filter configuration for Business Central style filtering
-export type FilterExpression<T> = [string, ...T[]]
 
-export type FilterCriteria<T extends BaseEntity> = {
-	[K in keyof T['$inferSelect']]?: FilterExpression<T['$inferSelect'][K]>
-}
-
-export interface BulkOperationResult<T, E extends BaseEntity> {
-	batch: {
-		size: number
-		processed: number
-		failed: number
-		errors?: Array<{
-			id: IdType<E>
-			error: string
-		}>
-	}
-	data: T
-}
