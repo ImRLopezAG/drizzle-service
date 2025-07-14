@@ -1,7 +1,16 @@
-
+import type {
+	BulkOperationResult,
+	Handler,
+	MutationOperations,
+	MutationsBulkOperations,
+	QueryOperations,
+	SQLiteDb,
+	Service,
+	ServiceHooks,
+	ServiceMethods,
+} from 'drizzle-service/builder/types.d.ts'
 import { describe, expectTypeOf, it } from 'vitest'
 import { service, todos, users } from './schema'
-import type { Service, SQLiteDb, QueryOperations, MutationOperations, Handler, MutationsBulkOperations, ServiceHooks, ServiceMethods, BulkOperationResult } from 'drizzle-service/builder/types.d.ts'
 
 // Service instances for type testing
 const userService = service(users, {
@@ -32,12 +41,8 @@ type TodoInsert = typeof todos.$inferInsert
 describe('SQLite Service Types', () => {
 	describe('Base Service Structure', () => {
 		it('should have correct repository interface structure', () => {
-			expectTypeOf(userService).toMatchTypeOf<
-				Service<UserEntity, SQLiteDb>
-			>()
-			expectTypeOf(todosService).toMatchTypeOf<
-				Service<TodoEntity, SQLiteDb>
-			>()
+			expectTypeOf(userService).toMatchTypeOf<Service<UserEntity, SQLiteDb>>()
+			expectTypeOf(todosService).toMatchTypeOf<Service<TodoEntity, SQLiteDb>>()
 		})
 
 		it('should expose database instance', () => {
@@ -59,19 +64,17 @@ describe('SQLite Service Types', () => {
 			expectTypeOf(todosService).toMatchTypeOf<QueryOperations<TodoEntity>>()
 		})
 
-		it('should have correct findAll method types', () => {
-			expectTypeOf(userService.findAll).toBeFunction()
-			expectTypeOf(todosService.findAll).toBeFunction()
+		it('should have correct find method types', () => {
+			expectTypeOf(userService.find).toBeFunction()
+			expectTypeOf(todosService.find).toBeFunction()
 		})
 
-		it('should have correct findById method types', () => {
-			expectTypeOf(userService.findById).toBeFunction()
-			expectTypeOf(todosService.findById).toBeFunction()
+		it('should have correct findOne method types', () => {
+			expectTypeOf(userService.findOne).toBeFunction()
+			expectTypeOf(todosService.findOne).toBeFunction()
 
-			expectTypeOf(userService.findById).parameter(0).toEqualTypeOf<number>()
-			expectTypeOf(todosService.findById)
-				.parameter(0)
-				.toEqualTypeOf<string>()
+			expectTypeOf(userService.findOne).parameter(0).toEqualTypeOf<number>()
+			expectTypeOf(todosService.findOne).parameter(0).toEqualTypeOf<string>()
 		})
 
 		it('should have correct findBy method types', () => {
@@ -101,24 +104,16 @@ describe('SQLite Service Types', () => {
 
 	describe('Mutation Operations Types', () => {
 		it('should implement MutationOperations interface', () => {
-			expectTypeOf(userService).toMatchTypeOf<
-				MutationOperations<UserEntity>
-			>()
-			expectTypeOf(todosService).toMatchTypeOf<
-				MutationOperations<TodoEntity>
-			>()
+			expectTypeOf(userService).toMatchTypeOf<MutationOperations<UserEntity>>()
+			expectTypeOf(todosService).toMatchTypeOf<MutationOperations<TodoEntity>>()
 		})
 
 		it('should have correct create method types', () => {
 			expectTypeOf(userService.create).toBeFunction()
 			expectTypeOf(todosService.create).toBeFunction()
 
-			expectTypeOf(userService.create)
-				.parameter(0)
-				.toMatchTypeOf<UserInsert>()
-			expectTypeOf(todosService.create)
-				.parameter(0)
-				.toMatchTypeOf<TodoInsert>()
+			expectTypeOf(userService.create).parameter(0).toMatchTypeOf<UserInsert>()
+			expectTypeOf(todosService.create).parameter(0).toMatchTypeOf<TodoInsert>()
 
 			expectTypeOf(userService.create).returns.toEqualTypeOf<
 				Handler<UserSelect>
@@ -168,12 +163,8 @@ describe('SQLite Service Types', () => {
 			expectTypeOf(userService.hardDelete).toBeFunction()
 			expectTypeOf(todosService.hardDelete).toBeFunction()
 
-			expectTypeOf(userService.hardDelete)
-				.parameter(0)
-				.toEqualTypeOf<number>()
-			expectTypeOf(todosService.hardDelete)
-				.parameter(0)
-				.toEqualTypeOf<string>()
+			expectTypeOf(userService.hardDelete).parameter(0).toEqualTypeOf<number>()
+			expectTypeOf(todosService.hardDelete).parameter(0).toEqualTypeOf<string>()
 
 			expectTypeOf(userService.hardDelete).returns.toEqualTypeOf<
 				Promise<{ readonly success: boolean; readonly message?: string }>
@@ -256,10 +247,20 @@ describe('SQLite Service Types', () => {
 				.toEqualTypeOf<string[]>()
 
 			expectTypeOf(userService.bulkDelete).returns.toEqualTypeOf<
-				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, UserEntity>>
+				Promise<
+					BulkOperationResult<
+						{ readonly success: boolean; readonly message?: string },
+						UserEntity
+					>
+				>
 			>()
 			expectTypeOf(todosService.bulkDelete).returns.toEqualTypeOf<
-				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, TodoEntity>>
+				Promise<
+					BulkOperationResult<
+						{ readonly success: boolean; readonly message?: string },
+						TodoEntity
+					>
+				>
 			>()
 		})
 
@@ -275,10 +276,20 @@ describe('SQLite Service Types', () => {
 				.toEqualTypeOf<string[]>()
 
 			expectTypeOf(userService.bulkHardDelete).returns.toEqualTypeOf<
-				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, UserEntity>>
+				Promise<
+					BulkOperationResult<
+						{ readonly success: boolean; readonly message?: string },
+						UserEntity
+					>
+				>
 			>()
 			expectTypeOf(todosService.bulkHardDelete).returns.toEqualTypeOf<
-				Promise<BulkOperationResult<{ readonly success: boolean; readonly message?: string }, TodoEntity>>
+				Promise<
+					BulkOperationResult<
+						{ readonly success: boolean; readonly message?: string },
+						TodoEntity
+					>
+				>
 			>()
 		})
 	})
@@ -288,12 +299,8 @@ describe('SQLite Service Types', () => {
 			type UserHandler = Handler<UserSelect>
 			type TodoHandler = Handler<TodoSelect>
 
-			expectTypeOf<UserHandler>().toEqualTypeOf<
-				Handler<UserSelect>
-			>()
-			expectTypeOf<TodoHandler>().toEqualTypeOf<
-				Handler<TodoSelect>
-			>()
+			expectTypeOf<UserHandler>().toEqualTypeOf<Handler<UserSelect>>()
+			expectTypeOf<TodoHandler>().toEqualTypeOf<Handler<TodoSelect>>()
 		})
 	})
 
@@ -389,21 +396,13 @@ describe('SQLite Service Types', () => {
 
 	describe('Service Methods Integration', () => {
 		it('should implement ServiceMethods interface', () => {
-			expectTypeOf(userService).toMatchTypeOf<
-				ServiceMethods<UserEntity>
-			>()
-			expectTypeOf(todosService).toMatchTypeOf<
-				ServiceMethods<TodoEntity>
-			>()
+			expectTypeOf(userService).toMatchTypeOf<ServiceMethods<UserEntity>>()
+			expectTypeOf(todosService).toMatchTypeOf<ServiceMethods<TodoEntity>>()
 		})
 
 		it('should expose underscore methods accessor', () => {
-			expectTypeOf(userService._).toMatchTypeOf<
-				ServiceMethods<UserEntity>
-			>()
-			expectTypeOf(todosService._).toMatchTypeOf<
-				ServiceMethods<TodoEntity>
-			>()
+			expectTypeOf(userService._).toMatchTypeOf<ServiceMethods<UserEntity>>()
+			expectTypeOf(todosService._).toMatchTypeOf<ServiceMethods<TodoEntity>>()
 		})
 	})
 

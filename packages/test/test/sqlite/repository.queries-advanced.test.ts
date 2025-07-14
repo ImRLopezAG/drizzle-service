@@ -1,7 +1,7 @@
 import { and, eq, gt, like, lt, or, sql } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { tenants, todos, users } from './schema'
 import { createTodo, testIds, todosService, uniquePrefix } from './repository'
+import { tenants, todos, users } from './schema'
 import { setupBeforeAll } from './test-setup'
 
 setupBeforeAll()
@@ -29,8 +29,8 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	})
 
 	it('should find records with pagination', async () => {
-		const page1 = await todosService.findAll({ page: 1, limit: 5 })
-		const page2 = await todosService.findAll({ page: 2, limit: 5 })
+		const page1 = await todosService.find({ page: 1, limit: 5 })
+		const page2 = await todosService.find({ page: 2, limit: 5 })
 
 		expect(page1).toHaveLength(5)
 		expect(page2).toHaveLength(5)
@@ -46,14 +46,14 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 
 	it('should respect the maximum limit', async () => {
 		// The Service is configured with a maxLimit, but it seems to be higher or not enforced
-		const todos = await todosService.findAll({ limit: 1000 })
+		const todos = await todosService.find({ limit: 1000 })
 
 		// We just verify we get results and don't error when requesting a very large limit
 		expect(todos.length).toBeGreaterThan(0)
 	})
 
 	it('should order results by a single field ascending', async () => {
-		const todos = await todosService.findAll({
+		const todos = await todosService.find({
 			orderBy: { title: 'asc' },
 		})
 
@@ -64,7 +64,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	})
 
 	it('should order results by a single field descending', async () => {
-		const todos = await todosService.findAll({
+		const todos = await todosService.find({
 			orderBy: { title: 'desc' },
 		})
 
@@ -122,7 +122,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 
 	it('should apply custom SQL conditions', async () => {
 		// Use the table reference directly, not the result variable
-		const todosResult = await todosService.findAll({
+		const todosResult = await todosService.find({
 			custom: sql`title LIKE ${`%${uniquePrefix}%`}`,
 		})
 
@@ -137,7 +137,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	it('should apply ordering with multiple fields', async () => {
 		// Note: The order of fields might vary by implementation
 		// Just verify we get ordered results without errors
-		const todos = await todosService.findAll({
+		const todos = await todosService.find({
 			orderBy: { priority: 'desc', status: 'asc' },
 		})
 
@@ -173,7 +173,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	})
 
 	it('should combine pagination with filters and ordering', async () => {
-		const todos = await todosService.findAll({
+		const todos = await todosService.find({
 			page: 1,
 			limit: 5,
 			orderBy: { status: 'asc', createdAt: 'desc' },
@@ -222,7 +222,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	})
 
 	it('should parse results with a custom function', async () => {
-		const result = await todosService.findAll({
+		const result = await todosService.find({
 			parse: (data) => {
 				return data.map((todo) => ({
 					id: todo.id,
@@ -250,7 +250,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 		const searchString = uniquePrefix
 		const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 hours ago
 
-		const todosWithSearch = await todosService.findAll({
+		const todosWithSearch = await todosService.find({
 			custom: and(
 				like(sql`title`, `%${searchString}%`),
 				gt(sql`created_at`, Math.floor(cutoffDate.getTime() / 1000)), // Convert to Unix timestamp for SQLite
@@ -270,7 +270,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 
 	it('should support complex AND/OR conditions', async () => {
 		// Find todos that are either (high priority AND done status) OR (low priority AND in-progress status)
-		const todosComplex = await todosService.findAll({
+		const todosComplex = await todosService.find({
 			custom: or(
 				and(eq(sql`priority`, 'high'), eq(sql`status`, 'done')),
 				and(eq(sql`priority`, 'low'), eq(sql`status`, 'in-progress')),
@@ -294,7 +294,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 		const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
 		// Find todos created in the last day
-		const todosInRange = await todosService.findAll({
+		const todosInRange = await todosService.find({
 			custom: and(
 				gt(sql`created_at`, oneDayAgo.toISOString()), // Convert to ISO string for PostgreSQL
 				lt(sql`created_at`, now.toISOString()),
@@ -341,7 +341,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	})
 
 	it('should handle multiple relations in queries', async () => {
-		const todosWithMultipleRelations = await todosService.findAll({
+		const todosWithMultipleRelations = await todosService.find({
 			relations: [
 				{ type: 'left', table: users, sql: eq(todos.userId, users.id) },
 				{
@@ -362,7 +362,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	})
 
 	it('should handle custom SQL conditions with relations', async () => {
-		const todosWithCustomCondition = await todosService.findAll({
+		const todosWithCustomCondition = await todosService.find({
 			relations: [
 				{ type: 'left', table: users, sql: eq(todos.userId, users.id) },
 			],
@@ -377,7 +377,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	})
 
 	it('should handle custom SQL conditions with multiple relations', async () => {
-		const todosWithMultipleRelations = await todosService.findAll({
+		const todosWithMultipleRelations = await todosService.find({
 			relations: [
 				{ type: 'left', table: users, sql: eq(todos.userId, users.id) },
 				{
@@ -401,7 +401,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	})
 
 	it('should handle custom SQL conditions with complex logic', async () => {
-		const todosWithComplexCondition = await todosService.findAll({
+		const todosWithComplexCondition = await todosService.find({
 			custom: or(
 				and(
 					like(sql`title`, `%${uniquePrefix}%`),
@@ -429,7 +429,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	})
 
 	it('should handle workspace', async () => {
-		const workspaceTodos = await todosService.findAll({
+		const workspaceTodos = await todosService.find({
 			workspace: {
 				field: 'tenant',
 				value: testIds.tenantId,

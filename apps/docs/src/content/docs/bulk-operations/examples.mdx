@@ -171,7 +171,7 @@ const syncProductCatalog = async (pimProducts: any[]) => {
 
   // Deactivate products not in PIM (discontinued items)
   const pimSkus = pimProducts.map(p => p.sku)
-  const allProducts = await productService.findAll({ limit: 50000 })
+  const allProducts = await productService.find({ limit: 50000 })
   const discontinuedProducts = allProducts
     .filter(product => !pimSkus.includes(product.sku))
     .map(product => product.id)
@@ -286,7 +286,7 @@ const importCustomersFromSalesforce = async (salesforceContacts: any[]) => {
 
     if (duplicateEmailErrors && duplicateEmailErrors.length > 0) {
       // Update existing customers instead of creating new ones
-      const existingCustomers = await customerService.findAll({
+      const existingCustomers = await customerService.find({
         custom: sql`email IN (${duplicateEmailErrors.map(e => 
           salesforceContacts.find(c => c.Id === e.id)?.Email
         ).filter(Boolean)})`
@@ -650,7 +650,7 @@ const quarterlyCustomerCleanup = async () => {
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
 
   // Find customers to archive (inactive for 3+ years)
-  const customersToArchive = await customerService.findAll({
+  const customersToArchive = await customerService.find({
     custom: sql`
       ${customers.lastOrderDate} < ${threeYearsAgo} 
       OR (${customers.lastOrderDate} IS NULL AND ${customers.createdAt} < ${threeYearsAgo})
@@ -659,7 +659,7 @@ const quarterlyCustomerCleanup = async () => {
   })
 
   // Find customers to anonymize (GDPR right to be forgotten requests older than 1 year)
-  const customersToAnonymize = await customerService.findAll({
+  const customersToAnonymize = await customerService.find({
     custom: sql`
       ${customers.gdprDeleteRequestDate} IS NOT NULL 
       AND ${customers.gdprDeleteRequestDate} < ${oneYearAgo}
@@ -739,7 +739,7 @@ const quarterlyCustomerCleanup = async () => {
 // Real scenario: Restore customers who were accidentally deleted due to system error
 const restoreAccidentallyDeletedCustomers = async (incidentDate: Date) => {
   // Find customers deleted on the incident date
-  const deletedCustomers = await customerService.findAll({
+  const deletedCustomers = await customerService.find({
     custom: sql`
       ${customers.deletedAt} >= ${incidentDate} 
       AND ${customers.deletedAt} < ${new Date(incidentDate.getTime() + 24 * 60 * 60 * 1000)}
@@ -821,7 +821,7 @@ const generateMonthlySalesReport = async (month: number, year: number) => {
   const monthEnd = new Date(year, month, 0, 23, 59, 59)
 
   // Get orders for the month
-  const monthlyOrders = await orderService.findAll({
+  const monthlyOrders = await orderService.find({
     custom: sql`
       ${orders.orderDate} >= ${monthStart} 
       AND ${orders.orderDate} <= ${monthEnd}

@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { todos, users } from './schema'
 import {
 	type UserWithTodos,
 	createTodo,
@@ -9,6 +8,7 @@ import {
 	uniquePrefix,
 	userService,
 } from './repository'
+import { todos, users } from './schema'
 import { setupBeforeAll } from './test-setup'
 
 setupBeforeAll()
@@ -36,7 +36,7 @@ describe('SQLITE Service: Query Operations (Without Options)', () => {
 	})
 
 	it('should find all records', async () => {
-		const todos = await todosService.findAll()
+		const todos = await todosService.find()
 		expect(todos).toBeInstanceOf(Array)
 		expect(todos.length).toBeGreaterThan(0)
 
@@ -63,7 +63,7 @@ describe('SQLITE Service: Query Operations (Without Options)', () => {
 			throw new Error('No todo ID available for testing')
 		}
 
-		const todo = await todosService.findById(todoId)
+		const todo = await todosService.findOne(todoId)
 
 		expect(todo).not.toBeNull()
 		expect(todo?.id).toBe(todoId)
@@ -71,7 +71,7 @@ describe('SQLITE Service: Query Operations (Without Options)', () => {
 
 	it('should return null when finding a non-existent ID', async () => {
 		const nonExistentId = 'non-existent-id'
-		const todo = await todosService.findById(nonExistentId)
+		const todo = await todosService.findOne(nonExistentId)
 
 		expect(todo).toBeNull()
 	})

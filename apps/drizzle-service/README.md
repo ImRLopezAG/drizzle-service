@@ -111,8 +111,10 @@ export const userService = service(schema.users, {
   defaultLimit: 50,
   maxLimit: 500,
 })
-
+```
 ### 3. Use the Service
+
+```typescript
 
 // main.ts
 import { userService } from './db'
@@ -128,7 +130,7 @@ async function main() {
   console.log('Created user:', user)
 
   // Find users with pagination
-  const users = await userService.findAll({
+  const users = await userService.find({
     page: 1,
     limit: 10,
     orderBy: { createdAt: 'desc' }
@@ -157,11 +159,11 @@ async function main() {
 
 ### Query Operations
 
-#### `findAll(options?)`
+#### `find(options?)`
 Retrieves all records with optional filtering, pagination, and relations.
 
 ```typescript
-const users = await userService.findAll({
+const users = await userService.find({
   page: 1,
   limit: 20,
   orderBy: { createdAt: 'desc' },
@@ -169,11 +171,11 @@ const users = await userService.findAll({
 })
 ```
 
-#### `findById(id, options?)`
+#### `findOne(id, options?)`
 Finds a single record by primary key.
 
 ```typescript
-const user = await userService.findById(1)
+const user = await userService.findOne(1)
 ```
 
 #### `findBy(criteria, options?)`
@@ -397,7 +399,7 @@ try {
 ### After (Drizzle Service)
 ```typescript
 // Clean, declarative API with built-in pagination and error handling
-const users = await userService.findAll({
+const users = await userService.find({
   page: 1,
   limit: 20,
   orderBy: { createdAt: 'desc' }

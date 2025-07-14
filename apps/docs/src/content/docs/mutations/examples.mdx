@@ -410,7 +410,7 @@ const processPayment = async (paymentData: {
   }, {
     beforeAction: async (data) => {
       // Validate account balances
-      const fromAccount = await accountService.findById(data.fromAccountId)
+      const fromAccount = await accountService.findOne(data.fromAccountId)
       if (!fromAccount || fromAccount.balance < data.amount) {
         throw new Error('Insufficient funds')
       }
@@ -420,7 +420,7 @@ const processPayment = async (paymentData: {
         throw new Error('Source account is not active')
       }
       
-      const toAccount = await accountService.findById(data.toAccountId)
+      const toAccount = await accountService.findOne(data.toAccountId)
       if (!toAccount || toAccount.status !== 'active') {
         throw new Error('Destination account is not active')
       }

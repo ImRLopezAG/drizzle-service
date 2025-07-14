@@ -99,7 +99,7 @@ const orderService = service(orders, { // [!code highlight]
 })
 
 // Query product catalog
-const activeProducts = await productService.findAll({
+const activeProducts = await productService.find({
   orderBy: { updatedAt: 'desc' }, // [!code]
   limit: 20 // [!code]
 })

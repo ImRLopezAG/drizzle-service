@@ -2,7 +2,7 @@
   "name": "drizzle-service",
   "module": "lib/index.js",
   "type": "module",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "A service for managing Drizzle ORM entities with advanced CRUD operations, pagination, soft deletes, relations, and bulk operations full type-safe",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -26,6 +26,9 @@
       ],
       "builder/*": [
         "lib/builder/*.d.ts"
+      ],
+      "helpers": [
+        "lib/helpers.d.ts"
       ]
     }
   },
@@ -49,6 +52,11 @@
       "types": "./lib/builder/*.d.ts",
       "import": "./lib/builder/*",
       "require": "./lib/builder/*"
+    },
+    "./helpers": {
+      "types": "./lib/helpers.d.ts",
+      "import": "./lib/helpers.js",
+      "require": "./lib/helpers.js"
     }
   },
   "files": [

@@ -1,5 +1,4 @@
 import type { Column, SQL, Table } from 'drizzle-orm'
-import type { MySqlDatabase, MySqlSelect } from 'drizzle-orm/mysql-core'
 import type { PgDatabase, PgSelect } from 'drizzle-orm/pg-core'
 import type { BaseSQLiteDatabase, SQLiteSelect } from 'drizzle-orm/sqlite-core'
 // Base entity interface that all tables must implement
@@ -18,13 +17,10 @@ export interface BaseEntity extends Table {
 export type SQLiteDb = BaseSQLiteDatabase<any, any, any, any>
 // biome-ignore lint/suspicious/noExplicitAny: Drizzle database types require any for schema generics
 export type PostgresDb = PgDatabase<any, any, any>
-// biome-ignore lint/suspicious/noExplicitAny: Drizzle database types require any for schema generics
-export type MySqlDb = MySqlDatabase<any, any>
-
 // Query builder types for each database
 export type SQLiteQb = SQLiteSelect
 export type PostgresQb = PgSelect
-export type MySqlQb = MySqlSelect
+export type QBuilders = SQLiteQb | PostgresQb
 
 export type Handler<T> = Promise<[ServiceError, null] | [null, T]>
 
@@ -63,24 +59,20 @@ export class NotFoundError extends Error {
 export type ServiceError = DatabaseError | ValidationError | NotFoundError
 
 export type ServiceOptions<
-    T extends BaseEntity,
-    TExtensions = Record<string, unknown>,
+	T extends BaseEntity,
+	TExtensions = Record<string, unknown>,
 > = {
-    readonly defaultLimit?: number
-    readonly maxLimit?: number
-    readonly soft?: SoftDeleteOption<T>
-    readonly batchSize?: number
-    override?: (
-        baseMethods: ServiceMethods<T>,
-    ) => Partial<ServiceMethods<T>>
-} & (
-    // If the entity has an id field of type string, id is optional and must be a string key
-    T['$inferSelect'] extends { id: infer IdType }
-        ? IdType extends string
-            ? { id?: Extract<keyof T['$inferSelect'], string> }
-            : { id: Extract<keyof T['$inferSelect'], string> }
-        : { id: Extract<keyof T['$inferSelect'], string> }
-) & TExtensions
+	readonly defaultLimit?: number
+	readonly maxLimit?: number
+	readonly soft?: SoftDeleteOption<T>
+	readonly batchSize?: number
+	override?: (baseMethods: ServiceMethods<T>) => Partial<ServiceMethods<T>>
+} & (T['$inferSelect'] extends { id: infer IdType } // If the entity has an id field of type string, id is optional and must be a string key
+	? IdType extends string
+		? { id?: Extract<keyof T['$inferSelect'], string> }
+		: { id: Extract<keyof T['$inferSelect'], string> }
+	: { id: Extract<keyof T['$inferSelect'], string> }) &
+	TExtensions
 
 // Query options that work with any entity
 export type QueryOpts<
@@ -127,12 +119,8 @@ export interface PaginationResult<T> {
 
 // Service hooks for lifecycle events - using Effect
 export interface ServiceHooks<T extends BaseEntity> {
-	beforeAction?: (
-		data: T['$inferSelect'],
-	) => Promise<void>
-	afterAction?: (
-		data: T['$inferSelect'],
-	) => Promise<void>
+	beforeAction?: (data: T['$inferSelect']) => Promise<void>
+	afterAction?: (data: T['$inferSelect']) => Promise<void>
 	onError?: (error: ServiceError) => Promise<void>
 }
 
@@ -167,7 +155,7 @@ export interface QueryOperations<
 	T extends BaseEntity,
 	TOpts extends ServiceOptions<T> | undefined = undefined,
 > {
-	findAll: <
+	find: <
 		TRels extends WithRelations[] = [],
 		TResult = TRels['length'] extends 0
 			? T['$inferSelect'][]
@@ -175,9 +163,23 @@ export interface QueryOperations<
 	>(
 		opts?: QueryOpts<T, TResult, TRels>,
 	) => Promise<TResult>
-	findById: <TResult = T['$inferSelect']>(
+	findOne: <TResult = T['$inferSelect']>(
 		id: IdType<T, TOpts>,
 	) => Promise<TResult | null>
+	/**
+	 * @deprecated This method is similar to `findBy` and may be changed or removed in the future.
+	 */
+	findByField: <
+		K extends keyof T['$inferSelect'],
+		TRels extends WithRelations[] = [],
+		TResult = TRels['length'] extends 0
+			? T['$inferSelect'][]
+			: RelationType<T, TRels>[],
+	>(
+		field: K,
+		value: T['$inferSelect'][K],
+		opts?: QueryOpts<T, TResult, TRels>,
+	) => Promise<TResult>
 	findBy: <
 		TRels extends WithRelations[] = [],
 		TResult = TRels['length'] extends 0
@@ -196,17 +198,7 @@ export interface QueryOperations<
 		criteria: Partial<T['$inferSelect']>,
 		opts?: QueryOpts<T, TResult, TRels>,
 	) => Promise<TResult>
-	findByField: <
-		K extends keyof T['$inferSelect'],
-		TRels extends WithRelations[] = [],
-		TResult = TRels['length'] extends 0
-			? T['$inferSelect'][]
-			: RelationType<T, TRels>[],
-	>(
-		field: K,
-		value: T['$inferSelect'][K],
-		opts?: QueryOpts<T, TResult, TRels>,
-	) => Promise<TResult>
+
 	count: (
 		criteria?: Partial<T['$inferSelect']>,
 		opts?: QueryOpts<T, number>,
@@ -338,7 +330,7 @@ type SoftDeleteConfig<
 				})
 
 // Helper type to properly distribute the union for soft delete config
-type SoftDeleteOption<T extends BaseEntity> = {
+export type SoftDeleteOption<T extends BaseEntity> = {
 	[K in keyof T['$inferSelect']]: SoftDeleteConfig<T, K>
 }[keyof T['$inferSelect']]
 
@@ -407,5 +399,3 @@ export type IdType<
 	: T['$inferSelect'] extends { id: infer IdType }
 		? IdType
 		: string
-
-

@@ -27,7 +27,7 @@ const productService = service(products, { // [!code highlight]
 })
 
 // Get all active products with pagination
-const activeProducts = await productService.findAll({ // [!code]
+const activeProducts = await productService.find({ // [!code]
   orderBy: { updatedAt: 'desc' },
   limit: 20
 }) // [!code]
@@ -57,7 +57,7 @@ const techProducts = await productService.findBy({
 
 ```typescript title="Retrieving Product Details with Relations"
 // Get single product by ID
-const product = await productService.findById('prod-123') // [!code highlight]
+const product = await productService.findOne('prod-123') // [!code highlight]
 
 if (product) {
   console.log(`Product: ${product.name} - $${product.price}`)
@@ -108,7 +108,7 @@ const userService = service(users, { // [!code highlight]
 const sessionService = service(userSessions) // [!code highlight]
 
 // Get all active users
-const activeUsers = await userService.findAll({
+const activeUsers = await userService.find({
   orderBy: { lastLoginAt: 'desc' } // [!code highlight]
 })
 
@@ -187,7 +187,7 @@ const articleService = drizzleService(db)(articles, {
 const authorService = drizzleService(db)(authors)
 
 // Get published articles with pagination
-const publishedArticles = await articleService.findAll({
+const publishedArticles = await articleService.find({
   orderBy: { publishedAt: 'desc' },
   limit: 20
 })
@@ -271,7 +271,7 @@ const orderService = drizzleService(db)(orders, {
 })
 
 // Get recent orders
-const recentOrders = await orderService.findAll({
+const recentOrders = await orderService.find({
   orderBy: { createdAt: 'desc' },
   limit: 50
 })
@@ -314,7 +314,7 @@ const customerOrders = await orderService.findByField(
 async function getRepeatCustomers() {
   // This would typically involve a more complex query with grouping
   // For demonstration, we'll show the basic pattern
-  const allOrders = await orderService.findAll()
+  const allOrders = await orderService.find()
   
   const customerOrderCounts = allOrders.reduce((acc, order) => {
     acc[order.customerId] = (acc[order.customerId] || 0) + 1
@@ -429,7 +429,7 @@ const apiLogs = await logService.findBy({
 
 ```typescript title="Advanced Query Patterns and Optimization"
 // Complex multi-field sorting
-const sortedProducts = await productService.findAll({
+const sortedProducts = await productService.find({
   orderBy: [
     { featured: 'desc' },
     { rating: 'desc' }, 
@@ -498,7 +498,7 @@ async function getPaginatedProducts(cursor?: string, limit = 20) {
 async function getProductPage(page = 1, pageSize = 20) {
   const offset = (page - 1) * pageSize
   
-  const products = await productService.findAll({
+  const products = await productService.find({
     orderBy: { createdAt: 'desc' },
     limit: pageSize,
     offset

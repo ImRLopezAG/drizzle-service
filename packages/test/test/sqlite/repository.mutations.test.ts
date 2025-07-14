@@ -101,7 +101,7 @@ describe('SQLITE Service: Mutation Operations', () => {
 		expect(message).toContain('successfully soft deleted')
 
 		// Verify the record is soft deleted
-		const deleted = await todosService.findById(todo.id)
+		const deleted = await todosService.findOne(todo.id)
 		expect(deleted).not.toBeNull()
 		expect(deleted?.status).toBe('canceled')
 	})
@@ -112,7 +112,7 @@ describe('SQLITE Service: Mutation Operations', () => {
 		await todosService.delete(todo.id)
 
 		// Soft deleted records should not be returned in normal queries
-		const todos = await todosService.findAll()
+		const todos = await todosService.find()
 		const found = todos.find((t) => t.id === todo.id)
 		expect(found).toBeUndefined()
 	})
@@ -123,7 +123,7 @@ describe('SQLITE Service: Mutation Operations', () => {
 		await todosService.delete(todo.id)
 
 		// Soft deleted records should be returned when withDeleted is true
-		const todos = await todosService.findAll({ withDeleted: true })
+		const todos = await todosService.find({ withDeleted: true })
 		const found = todos.find((t) => t.id === todo.id)
 		expect(found).toBeDefined()
 		expect(found?.status).toBe('canceled')
@@ -150,7 +150,7 @@ describe('SQLITE Service: Mutation Operations', () => {
 		expect(deleteResult.message).toContain('successfully soft deleted')
 
 		// Verify it's soft deleted
-		const deleted = await todosService.findById(todo.id)
+		const deleted = await todosService.findOne(todo.id)
 		expect(deleted).not.toBeNull()
 		expect(deleted?.status).toBe('canceled')
 
@@ -160,7 +160,7 @@ describe('SQLITE Service: Mutation Operations', () => {
 		expect(restoreResult.message).toContain('successfully restored')
 
 		// Verify it's restored
-		const restored = await todosService.findById(todo.id)
+		const restored = await todosService.findOne(todo.id)
 		expect(restored).not.toBeNull()
 		expect(restored?.status).not.toBe('canceled')
 		expect(restored?.id).toBe(todo.id)

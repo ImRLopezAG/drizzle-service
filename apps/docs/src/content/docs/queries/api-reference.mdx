@@ -1,6 +1,6 @@
 ---
 title: Queries - API Reference
-description: Complete API reference for query operations including findAll, findById, findBy, and advanced filtering methods
+description: Complete API reference for query operations including find, findOne, findBy, and advanced filtering methods
 ---
 
 The Drizzle Service provides a comprehensive set of query operations that allow you to retrieve data from your database efficiently. These operations support both PostgreSQL and SQLite databases and include advanced features like filtering, pagination, relations, and soft-delete handling.
@@ -21,8 +21,8 @@ The Drizzle Service provides a comprehensive set of query operations that allow 
 
 | Method | Description |
 |--------|-------------|
-| `findAll(opts?)` | Retrieve all records with optional filtering and pagination |
-| `findById(id)` | Find a single record by its primary key |
+| `find(opts?)` | Retrieve all records with optional filtering and pagination |
+| `findOne(id)` | Find a single record by its primary key |
 | `findBy(criteria, opts?)` | Find records matching specific criteria |
 | `findByField(field, value)` | Find records by a single field value |
 | `count(criteria?)` | Count records matching optional criteria |
@@ -140,7 +140,7 @@ Filter expressions follow the pattern: `[expression, ...values]`
 | `*` | Wildcard match | `['*%1*', 'search']` |
 | `@` | Case insensitive | `['@*%1*', 'John']` |
 
-## findAll()
+## find()
 
 Retrieves all entities from the data source with optional filtering and relations.
 
@@ -166,18 +166,18 @@ Returns `Promise<TResult>` where `TResult` is based on whether relations are inc
 
 ```typescript
 // Basic usage
-const todos = await todosService.findAll()
+const todos = await todosService.find()
 console.log(`Found ${todos.length} todos`)
 
 // With pagination and ordering
-const paginatedTodos = await todosService.findAll({
+const paginatedTodos = await todosService.find({
   page: 1,
   limit: 10,
   orderBy: { createdAt: 'desc' }
 })
 
 // With workspace filtering
-const workspaceTodos = await todosService.findAll({
+const workspaceTodos = await todosService.find({
   workspace: {
     field: 'tenant',
     value: 'company-abc'
@@ -185,7 +185,7 @@ const workspaceTodos = await todosService.findAll({
 })
 ```
 
-## findById()
+## findOne()
 
 Finds a single entity by its unique identifier.
 
@@ -208,7 +208,7 @@ Returns `Promise<TResult | null>` where `TResult` defaults to `T['$inferSelect']
 ### Example
 
 ```typescript
-const todo = await todosService.findById('todo-123')
+const todo = await todosService.findOne('todo-123')
 
 if (todo) {
   console.log('Found todo:', todo.title)
@@ -218,7 +218,7 @@ if (todo) {
 }
 
 // Non-existent ID returns null
-const nonExistent = await todosService.findById('non-existent-id')
+const nonExistent = await todosService.findOne('non-existent-id')
 console.log(nonExistent) // null
 ```
 
@@ -548,7 +548,7 @@ Common options available for most query operations.
 ### Query Options Example
 
 ```typescript
-const todos = await todosService.findAll({
+const todos = await todosService.find({
   page: 1,
   limit: 20,
   orderBy: { 

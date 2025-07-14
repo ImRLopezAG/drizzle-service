@@ -244,7 +244,7 @@ if (success) {
   // Contains: 'successfully soft deleted'
   
   // Verify the record is soft deleted but still exists
-  const deleted = await todosService.findById(todoId)
+  const deleted = await todosService.findOne(todoId)
   console.log('Status after delete:', deleted?.status) // 'canceled'
 } else {
   console.error('Delete failed')
@@ -289,7 +289,7 @@ if (success) {
   console.log('Todo permanently deleted:', message)
   
   // Verify the record is completely removed
-  const deleted = await todosService.findById(todoId)
+  const deleted = await todosService.findOne(todoId)
   console.log('Record exists:', deleted) // null
 } else {
   console.error('Hard delete failed')
@@ -338,7 +338,7 @@ if (restoreResult.success) {
   console.log('Todo restored:', restoreResult.message)
   
   // Verify restoration
-  const restored = await todosService.findById(todoId)
+  const restored = await todosService.findOne(todoId)
   console.log('Status after restore:', restored?.status) // Back to original status
 } else {
   console.error('Restore failed')

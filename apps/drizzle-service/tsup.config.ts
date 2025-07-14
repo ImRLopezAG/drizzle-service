@@ -8,6 +8,8 @@ export default defineConfig({
 		'src/sqlite/index.ts',
 		'src/builder/index.ts',
 		'src/builder/types.ts',
+		'src/builder/filters.ts',
+		'src/helpers.ts',
 	],
 	format: ['esm'],
 	minify: true,

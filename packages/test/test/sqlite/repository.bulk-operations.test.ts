@@ -91,7 +91,7 @@ describe('SQLITE Service: Bulk Mutation Operations', () => {
 
 		// Verify all are soft deleted
 		for (const id of idsToDelete) {
-			const deleted = await todosService.findById(id)
+			const deleted = await todosService.findOne(id)
 			expect(deleted).not.toBeNull()
 			expect(deleted?.status).toBe('canceled')
 		}
@@ -113,7 +113,7 @@ describe('SQLITE Service: Bulk Mutation Operations', () => {
 
 		// Verify all are completely removed
 		for (const id of idsToHardDelete) {
-			const deleted = await todosService.findById(id)
+			const deleted = await todosService.findOne(id)
 			expect(deleted).toBeNull()
 		}
 	})
