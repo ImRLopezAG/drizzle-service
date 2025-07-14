@@ -1,60 +1,62 @@
 import {
-  loader,
-  type MetaData,
-  type PageData,
-  type Source,
-  type VirtualFile,
-} from 'fumadocs-core/source';
-import matter from 'gray-matter';
-import * as path from 'node:path';
+	type MetaData,
+	type PageData,
+	type Source,
+	type VirtualFile,
+	loader,
+} from 'fumadocs-core/source'
+import matter from 'gray-matter'
 
-const files = Object.entries(
-  import.meta.glob<true, 'raw'>('/src/content/docs/**/*', {
-    eager: true,
-    query: '?raw',
-    import: 'default',
-  }),
-);
+// Import all MDX and MD files from the content directory
+const files = import.meta.glob('../content/docs/**/*.{md,mdx}', {
+	query: '?raw',
+	import: 'default',
+	eager: true,
+}) as Record<string, string>
 
-const virtualFiles: VirtualFile[] = files.flatMap(([file, content]) => {
-  const ext = path.extname(file);
-  const virtualPath = path.relative(
-    './src/content/docs',
-    path.join(process.cwd(), file),
-  );
+// Import meta files (JSON)
+const metaFiles = import.meta.glob('../content/docs/**/meta.json', {
+	import: 'default',
+	eager: true,
+}) as Record<string, Record<string, unknown>>
 
-  if (ext === '.mdx' || ext === '.md') {
-    const parsed = matter(content);
+const virtualFiles: VirtualFile[] = []
 
-    return {
-      type: 'page',
-      path: virtualPath,
-      data: {
-        ...parsed.data,
-        content: parsed.content,
-      },
-    };
-  }
+// Process content files
+for (const [file, content] of Object.entries(files)) {
+	const virtualPath = file.replace('../content/docs/', '')
 
-  if (ext === '.json') {
-    return {
-      type: 'meta',
-      path: virtualPath,
-      data: JSON.parse(content),
-    };
-  }
+	const parsed = matter(content)
 
-  return [];
-});
+	virtualFiles.push({
+		type: 'page',
+		path: virtualPath,
+		data: {
+			...parsed.data,
+			content: parsed.content,
+		},
+	})
+}
+
+// Process meta files
+for (const [file, data] of Object.entries(metaFiles)) {
+	const virtualPath = file.replace('../content/docs/', '')
+
+	virtualFiles.push({
+		type: 'meta',
+		path: virtualPath,
+		data,
+	})
+}
 
 export const source = loader({
-  source: {
-    files: virtualFiles,
-  } as Source<{
-    pageData: PageData & {
-      content: string;
-    };
-    metaData: MetaData;
-  }>,
-  baseUrl: '/',
-});
+	source: {
+		files: virtualFiles,
+	} as Source<{
+		pageData: PageData & {
+			content: string
+		}
+		metaData: MetaData
+	}>,
+	baseUrl: '/',
+})

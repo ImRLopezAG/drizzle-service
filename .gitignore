@@ -43,7 +43,3 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 *.sql*
 
 # lock files
-pnpm-lock.yaml
-yarn.lock
-package-lock.json
-bun.lock
