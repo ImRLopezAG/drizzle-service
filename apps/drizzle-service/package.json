@@ -80,5 +80,6 @@
   },
   "dependencies": {
     "effect": "^3.16.13"
-  }
+  },
+  "packageManager": "pnpm@10.12.0"
 }
