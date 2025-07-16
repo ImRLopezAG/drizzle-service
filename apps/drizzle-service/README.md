@@ -157,6 +157,47 @@ async function main() {
 
 ## 📚 API Reference
 
+# Query Options Interface Tables
+
+## QueryOpts<T, TResult, TRels>
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `page?` | `number` | Optional page number for pagination |
+| `limit?` | `number` | Optional limit for number of results |
+| `orderBy?` | `{ [P in keyof T['$inferSelect']]?: 'asc' \| 'desc' }` | Optional sorting configuration for entity fields |
+| `withDeleted?` | `boolean` | Optional flag to include soft-deleted records |
+| `cursor?` | `Date \| null` | Optional cursor for cursor-based pagination |
+| `relations?` | `TRels` | Optional relations to include in the query |
+| `workspace?` | `{ field: keyof T['$inferSelect'], value: T['$inferSelect'][keyof T['$inferSelect']] }` | Optional workspace filtering configuration |
+| `custom?` | `SQL` | Optional custom SQL query |
+| `parse?` | Conditional type based on relations | Optional parser function for transforming results |
+
+### Parse Function Types
+- **Without relations**: `(data: T['$inferSelect'][]) => TResult`
+- **With relations**: `(data: RelationType<T, TRels>[]) => TResult`
+
+## FindOneOpts<T, TResult, TRelations>
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `withDeleted?` | `boolean` | Optional flag to include soft-deleted records |
+| `relations?` | `TRelations` | Optional relations to include in the query |
+| `workspace?` | `{ field: keyof T['$inferSelect'], value: T['$inferSelect'][keyof T['$inferSelect']] }` | Optional workspace filtering configuration |
+| `custom?` | `SQL` | Optional custom SQL query |
+| `parse?` | Conditional type based on relations | Optional parser function for transforming results |
+
+### Parse Function Types
+- **Without relations**: `(data: T['$inferSelect'] \| null) => TResult \| null`
+- **With relations**: `(data: RelationType<T, TRelations>[] \| null) => TResult \| null`
+
+## Notes
+
+- `FindOneOpts` extends `QueryOpts` but excludes: `page`, `limit`, `orderBy`, `cursor`, and `parse`
+- The `parse` function signature changes based on whether relations are included
+- `T` extends `BaseEntity` in both interfaces
+- Generic type parameters allow for flexible typing of entities, results, and relations
+
 ### Query Operations
 
 #### `find(options?)`

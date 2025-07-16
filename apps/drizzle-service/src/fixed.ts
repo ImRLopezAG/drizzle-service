@@ -1,5 +1,3 @@
-import { createService, sqliteIlike } from '@/builder'
-
 import {
 	createDatabaseError,
 	createNotFoundError,
@@ -10,36 +8,50 @@ import {
 	tryHandleError,
 } from '@/helpers'
 import { createFilters } from '@builder/filters'
+import {
+	type SQL,
+	type SQLWrapper,
+	and,
+	eq,
+	getTableName,
+	ilike,
+	inArray,
+	or,
+} from 'drizzle-orm'
+import { Effect } from 'effect'
 import type {
+	BaseDatabase,
+	BaseEntity,
 	BulkOperationResult,
 	FilterCriteria,
 	IdType,
 	MutationOperations,
 	MutationsBulkOperations,
 	PaginationResult,
+	PostgresDb,
 	QueryOperations,
 	QueryOpts,
 	RelationType,
 	SQLiteDb,
-	FindOneOpts,
 	Service,
+	ServiceBuilderFn,
 	ServiceHooks,
 	ServiceMethods,
+	ServiceOptions,
 	WithRelations,
 } from '@builder/types'
-import {
-	type SQLWrapper,
-	and,
-	count,
-	eq,
-	getTableName,
-	inArray,
-	or,
-} from 'drizzle-orm'
-import { Effect } from 'effect'
 
-export const createSqliteService = createService<SQLiteDb>(
-	(db, table, opts) => {
+import { PgDatabase } from 'drizzle-orm/pg-core'
+import { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core'
+import { sqliteIlike } from '@/builder'
+
+export function createService<TDb extends PostgresDb>(): ServiceBuilderFn<TDb>
+export function createService<TDb extends SQLiteDb>(): ServiceBuilderFn<TDb>
+export function createService<TDb extends BaseDatabase>(): ServiceBuilderFn<TDb>
+export function createService<
+	TDb extends BaseDatabase,
+>(): ServiceBuilderFn<TDb> {
+	return (db, table, opts) => {
 		type D = typeof db
 		type T = typeof table
 		type O = typeof opts
@@ -58,15 +70,72 @@ export const createSqliteService = createService<SQLiteDb>(
 			return (opts?.id as keyof typeof table) || ('id' as keyof typeof table)
 		}
 
-		const { withOpts, parseFilterExpression, handleQueries, handleOneQuery } = createFilters<T>(
-			{
+		function insertStatement(values: T['$inferInsert']) {
+			if (db instanceof PgDatabase) {
+				return db.insert(table).values(values).returning().execute()
+			}
+			if (db instanceof BaseSQLiteDatabase) {
+				return db.insert(table).values(values).returning().execute()
+			}
+			throw new Error('Unsupported database')
+		}
+
+		function updateStatement(
+			id: IdType<T, O>,
+			values: Partial<T['$inferInsert']>,
+			wrapper?: SQL,
+		) {
+			const idField = getIdField()
+			if (db instanceof PgDatabase) {
+				return db
+					.update(table)
+					.set(values)
+					.where(wrapper || eq(table[idField] as SQLWrapper, id))
+					.execute()
+			}
+			if (db instanceof BaseSQLiteDatabase) {
+				return db
+					.update(table)
+					.set(values)
+					.where(wrapper || eq(table[idField] as SQLWrapper, id))
+					.execute()
+			}
+			throw new Error('Unsupported database')
+		}
+
+		function deleteStatement(id: IdType<T, O>, wrapper?: SQL) {
+			const idField = getIdField()
+			if (db instanceof PgDatabase) {
+				return db
+					.delete(table)
+					.where(wrapper || eq(table[idField] as SQLWrapper, id))
+					.execute()
+			}
+			if (db instanceof BaseSQLiteDatabase) {
+				return db
+					.delete(table)
+					.where(wrapper || eq(table[idField] as SQLWrapper, id))
+					.execute()
+			}
+			throw new Error('Unsupported database')
+		}
+
+		const { withSoftDeleted, withOpts, parseFilterExpression, handleQueries } =
+			createFilters<T>({
 				table,
+				handleILike: (column, value) => {
+          if (db instanceof PgDatabase) {
+            return ilike(column, value)
+          }
+          if (db instanceof BaseSQLiteDatabase) {
+            return sqliteIlike(column, value)
+          }
+          throw new Error('Unsupported database')
+        },
 				soft,
 				defaultLimit,
 				maxLimit,
-				handleILike: sqliteIlike,
-			},
-		)
+			})
 
 		// Helper function to split array into batches
 		function createBatches<T>(array: T[], batchSize: number): T[][] {
@@ -81,8 +150,16 @@ export const createSqliteService = createService<SQLiteDb>(
 		// 🚀 REPOSITORY IMPLEMENTATION
 		// ===============================
 
-		// @ts-ignore
-		const createBaseQuery = () => db.select().from(table).$dynamic()
+		const createBaseQuery = () => {
+			if (db instanceof PgDatabase) {
+				// @ts-ignore
+				return db.select().from(table).$dynamic()
+			}
+			if (db instanceof BaseSQLiteDatabase) {
+				return db.select().from(table).$dynamic()
+			}
+			throw new Error('Unsupported database')
+		}
 
 		// ===============================
 		// 🚀 QUERY OPERATIONS
@@ -100,30 +177,19 @@ export const createSqliteService = createService<SQLiteDb>(
 				return handleError(handleQueries(createBaseQuery(), opts))
 			},
 
-			findOne: <
-				TRels extends WithRelations[] = [],
-				TResult = TRels['length'] extends 0
-					? T['$inferSelect'] 
-					: RelationType<T, TRels>,
-			>(
-				id: IdType<T, O>,
-				opts: FindOneOpts<T, TResult , TRels> = {},
-			) => {
-				const hasRelations = opts.relations && opts.relations.length > 0
+			findOne: <TResult = T['$inferSelect']>(id: IdType<T, O>) => {
 				return handleError(
-					handleOneQuery(createBaseQuery(), opts, {
-						beforeParse(q) {
-							const query = q.where(eq(table[getIdField()] as SQLWrapper, id))
-							if (hasRelations) return query
-							return query.limit(1)
-						},
-						afterParse(data) {
-							const isArray = Array.isArray(data)
-							if (isArray && data.length === 0) return null
-							if (hasRelations) return data  as TResult
-							if (isArray) return data[0]  as TResult
-							return data  as TResult
-						},
+					Effect.gen(function* () {
+						const query = withSoftDeleted(createBaseQuery())
+						const idField = getIdField()
+						const result = yield* tryEffect(async () => {
+							const result = await query
+								.where(eq(table[idField] as SQLWrapper, id))
+								.limit(1)
+							return result[0] as TResult | undefined
+						})
+
+						return result || null
 					}),
 				)
 			},
@@ -319,11 +385,7 @@ export const createSqliteService = createService<SQLiteDb>(
 						yield* executeHooks(hooks, insertData, 'before')
 
 						const result = yield* tryEffect(async () => {
-							const [result] = await db
-								.insert(table)
-								.values(insertData)
-								.returning()
-								.execute()
+							const [result] = await insertStatement(insertData)
 							return result
 						})
 
@@ -332,7 +394,6 @@ export const createSqliteService = createService<SQLiteDb>(
 								`Failed to create ${entityName}`,
 								{
 									code: 'SQL_FAILURE',
-									query: db.insert(table).values(insertData).toSQL(),
 								},
 							)
 						}
@@ -352,7 +413,6 @@ export const createSqliteService = createService<SQLiteDb>(
 			) => {
 				return tryHandleError(
 					Effect.gen(function* () {
-						const idField = getIdField()
 						const entity = yield* tryEffect(
 							async () => await _queryOperations.findOne(id),
 						)
@@ -371,12 +431,7 @@ export const createSqliteService = createService<SQLiteDb>(
 						yield* executeHooks(hooks, updateData, 'before')
 
 						const result = yield* tryEffect(async () => {
-							const [result] = await db
-								.update(table)
-								.set(updateData)
-								.where(eq(table[idField] as SQLWrapper, id))
-								.returning()
-								.execute()
+							const [result] = await updateStatement(id, updateData)
 
 							return result
 						})
@@ -386,11 +441,6 @@ export const createSqliteService = createService<SQLiteDb>(
 								`Failed to update ${entityName}`,
 								{
 									code: 'SQL_FAILURE',
-									query: db
-										.update(table)
-										.set(updateData)
-										.where(eq(table[idField] as SQLWrapper, id))
-										.toSQL(),
 								},
 							)
 						}
@@ -405,7 +455,7 @@ export const createSqliteService = createService<SQLiteDb>(
 			delete: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
 				return handleError(
 					Effect.gen(function* () {
-						const idField = getIdField()
+						const _idField = getIdField()
 
 						if (!soft)
 							return yield* createDatabaseError(
@@ -422,15 +472,10 @@ export const createSqliteService = createService<SQLiteDb>(
 
 						yield* executeHooks(hooks, entity, 'before')
 						const result = yield* tryEffect(async () => {
-							const updated = await db
-								.update(table)
-								.set({ [field]: deletedValue, updatedAt: new Date() } as Record<
-									string,
-									unknown
-								>)
-								.where(eq(table[idField] as SQLWrapper, id))
-								.returning()
-								.execute()
+							const updated = await updateStatement(id, {
+								[field]: deletedValue,
+								updatedAt: new Date(),
+							})
 
 							if (updated.length === 0) {
 								return new Error(
@@ -456,7 +501,7 @@ export const createSqliteService = createService<SQLiteDb>(
 			hardDelete: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
 				return handleError(
 					Effect.gen(function* () {
-						const idField = getIdField()
+						const _idField = getIdField()
 						const entity = yield* tryEffect(
 							async () => await _queryOperations.findOne(id),
 						)
@@ -466,11 +511,7 @@ export const createSqliteService = createService<SQLiteDb>(
 
 						yield* executeHooks(hooks, entity, 'before')
 						const result = yield* tryEffect(async () => {
-							const [deleted] = await db
-								.delete(table)
-								.where(eq(table[idField] as SQLWrapper, id))
-								.returning()
-								.execute()
+							const [deleted] = await deleteStatement(id)
 
 							return deleted
 						})
@@ -533,15 +574,11 @@ export const createSqliteService = createService<SQLiteDb>(
 							restoreValue = notDeletedValue
 						}
 
-						const idField = getIdField()
 						yield* tryEffect(async () => {
-							await db
-								.update(table)
-								.set({
-									[field]: restoreValue,
-									updatedAt: new Date(),
-								} as Record<string, unknown>)
-								.where(eq(table[idField] as SQLWrapper, id))
+							await updateStatement(id, {
+								[field]: restoreValue,
+								updatedAt: new Date(),
+							})
 						})
 
 						const restoredData = {
@@ -597,11 +634,7 @@ export const createSqliteService = createService<SQLiteDb>(
 						for (const batch of batches) {
 							try {
 								const batchResult = yield* tryEffect(async () => {
-									return await db
-										.insert(table)
-										.values(batch)
-										.returning()
-										.execute()
+									return await insertStatement(batch)
 								})
 
 								result.data.push(...batchResult)
@@ -657,20 +690,16 @@ export const createSqliteService = createService<SQLiteDb>(
 						yield* executeHooks(hooks, data, 'before')
 
 						const batches = createBatches(data, batchSize)
-						const idField = getIdField()
+						const _idField = getIdField()
 
 						for (const batch of batches) {
 							for (const item of batch) {
 								try {
 									const updated = yield* tryEffect(async () => {
-										const [updated] = await db
-											.update(table)
-											.set({
-												...item.changes,
-												updatedAt: new Date(),
-											})
-											.where(eq(table[idField] as SQLWrapper, item.id))
-											.returning()
+										const [updated] = await updateStatement(item.id, {
+											...item.changes,
+											updatedAt: new Date(),
+										})
 
 										return updated
 									})
@@ -782,14 +811,14 @@ export const createSqliteService = createService<SQLiteDb>(
 
 								// Perform the soft delete
 								const updated = yield* tryEffect(async () => {
-									return await db
-										.update(table)
-										.set({
+									return await updateStatement(
+										'' as IdType<T, O>,
+										{
 											[soft.field]: soft.deletedValue,
 											updatedAt: new Date(),
-										} as Partial<T['$inferInsert']>)
-										.where(inArray(table[idField] as SQLWrapper, validIds))
-										.returning()
+										},
+										inArray(table[idField] as SQLWrapper, validIds),
+									)
 								})
 
 								result.batch.processed += updated.length
@@ -894,9 +923,10 @@ export const createSqliteService = createService<SQLiteDb>(
 
 							// Perform the hard delete
 							yield* tryEffect(async () => {
-								await db
-									.delete(table)
-									.where(inArray(table[idField] as SQLWrapper, batch))
+								await deleteStatement(
+									'' as IdType<T, O>,
+									inArray(table[idField] as SQLWrapper, batch),
+								)
 							})
 
 							result.batch.processed += existingData.length
@@ -1034,14 +1064,14 @@ export const createSqliteService = createService<SQLiteDb>(
 										: null
 
 							const updated = yield* tryEffect(async () => {
-								return await db
-									.update(table)
-									.set({
+								return await updateStatement(
+									'' as IdType<T, O>,
+									{
 										[soft.field]: restoreValue,
 										updatedAt: new Date(),
-									} as Partial<T['$inferInsert']>)
-									.where(inArray(table[idField] as SQLWrapper, validIds))
-									.returning()
+									} as Partial<T['$inferInsert']>,
+									inArray(table[idField] as SQLWrapper, validIds),
+								)
 							})
 
 							result.batch.processed += updated.length
@@ -1120,5 +1150,37 @@ export const createSqliteService = createService<SQLiteDb>(
 			...repository,
 			...rest,
 		} as Service<T, D> & O
-	},
-)
+	}
+}
+
+
+
+
+export function drizzleService<D extends BaseDatabase>(
+  db: D,
+): {
+  <
+    T extends BaseEntity & { $inferSelect: { id: string } },
+    TExtensions extends Record<string, unknown> = Record<string, unknown>,
+  >(
+    table: T,
+    opts?: ServiceOptions<T, TExtensions>,
+  ): Service<T, D> & TExtensions
+  <
+    T extends BaseEntity,
+    TExtensions extends Record<string, unknown> = Record<string, unknown>,
+  >(
+    table: T,
+    opts: ServiceOptions<T, TExtensions>,
+  ): Service<T, D> & TExtensions
+}
+export function drizzleService<D extends BaseDatabase>(db: D) {
+  const service = createService<D>()
+  return <
+    T extends BaseEntity,
+    TExtensions extends Record<string, unknown> = Record<string, unknown>,
+  >(
+    table: T,
+    opts?: ServiceOptions<T, TExtensions>,
+  ) => service(db, table, opts)
+}

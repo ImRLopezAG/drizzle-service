@@ -1,13 +1,4 @@
-import { createParserFunction } from './'
-import type {
-	BaseEntity,
-	PostgresQb,
-	QBuilders,
-	QueryOpts,
-	SQLiteQb,
-	SoftDeleteOption,
-	WithRelations,
-} from './types'
+import { tryEffect } from '@/helpers'
 import {
 	type Column,
 	type SQLWrapper,
@@ -17,6 +8,17 @@ import {
 	gt,
 	ne,
 } from 'drizzle-orm'
+import { Effect } from 'effect'
+import { createParserFunction } from './'
+import type {
+	BaseEntity,
+	FindOneOpts,
+	QBuilders,
+	QueryOpts,
+	RelationType,
+	SoftDeleteOption,
+	WithRelations,
+} from './types'
 
 interface Filters<
 	T extends BaseEntity,
@@ -33,15 +35,10 @@ interface Filters<
 }
 
 // Function overloads for createFilters
-export function createFilters<T extends BaseEntity, Pg extends PostgresQb>(
-	config: Filters<T>,
-): FiltersReturn<T, Pg>
-export function createFilters<T extends BaseEntity, Sq extends SQLiteQb>(
-	config: Filters<T>,
-): FiltersReturn<T, Sq>
-export function createFilters<T extends BaseEntity>(
-	config: Filters<T>,
-): FiltersReturn<T, QBuilders>
+export function createFilters<
+	T extends BaseEntity,
+	QB extends QBuilders = QBuilders,
+>(config: Filters<T>): FiltersReturn<T, QB>
 export function createFilters<T extends BaseEntity>({
 	table,
 	soft,
@@ -49,7 +46,6 @@ export function createFilters<T extends BaseEntity>({
 	maxLimit = 100,
 	handleILike,
 }: Filters<T>) {
-
 	function withPagination<Q extends QBuilders, TResult>(
 		q: Q,
 		options?: QueryOpts<T, TResult>,
@@ -75,7 +71,8 @@ export function createFilters<T extends BaseEntity>({
 
 		if (orderExpressions.length === 0) return q
 
-		return (q as any).orderBy(...orderExpressions)
+		//@ts-ignore
+		return q.orderBy(...orderExpressions)
 	}
 
 	function withCursor<Q extends QBuilders, TResult>(
@@ -185,6 +182,94 @@ export function createFilters<T extends BaseEntity>({
 		return query
 	}
 
+	function handleQueries<
+		Q extends QBuilders,
+		TResult,
+		TRels extends WithRelations[] = [],
+	>(
+		query: Q,
+		queryOpts: QueryOpts<T, TResult, TRels>,
+		hooks?: {
+			beforeParse?: (q: Q) => Q
+			afterParse?: (data: TResult) => TResult
+		},
+	) {
+		return Effect.gen(function* () {
+			const { parse, ...opts } = queryOpts
+			const { beforeParse, afterParse } = hooks || {}
+			let q = withOpts(query, opts)
+
+			if (beforeParse) {
+				q = beforeParse(q)
+			}
+
+			const data = yield* tryEffect(async () => await q)
+
+			// Apply custom parse function if provided
+			if (parse) {
+				return parse(data as unknown as T['$inferSelect'][])
+			}
+
+			if (afterParse) {
+				return afterParse(data as unknown as TResult)
+			}
+
+			return data
+		})
+	}
+	function handleOneQuery<
+		Q extends QBuilders,
+		TResult,
+		TRels extends WithRelations[] = [],
+	>(
+		query: Q,
+		queryOpts: FindOneOpts<T, TResult, TRels>,
+		hooks?: {
+			beforeParse?: (q: Q) => Q
+			afterParse?: (data: TResult | null) => TResult | null
+		},
+	) {
+		return Effect.gen(function* () {
+			const { parse, ...opts } = queryOpts
+			const { beforeParse, afterParse } = hooks || {}
+			let q = withOpts(query, opts)
+
+			if (beforeParse) {
+				q = beforeParse(q)
+			}
+
+			const data = yield* tryEffect(async () => await q)
+
+			const isArray = Array.isArray(data)
+			const hasRelations = opts.relations && opts.relations.length > 0
+
+			if (parse) {
+				if (isArray && data.length === 0) return parse(null)
+
+				if (hasRelations) {
+					//@ts-ignore
+					return parse(data as unknown as RelationType<T, TRels>[])
+				}
+				if (isArray)
+					return parse(
+						data[0] as unknown as
+							| (T['$inferSelect'] & RelationType<T, TRels>[])
+							| null,
+					)
+				return parse(
+					data as unknown as
+						| (T['$inferSelect'][] & RelationType<T, TRels>)
+						| null,
+				)
+			}
+
+			if (afterParse) {
+				return afterParse(data as unknown as TResult | null)
+			}
+
+			return data as unknown as TResult | null
+		})
+	}
 	return {
 		withPagination,
 		withOrderBy,
@@ -195,6 +280,8 @@ export function createFilters<T extends BaseEntity>({
 		withWorkspace,
 		withOpts,
 		parseFilterExpression,
+		handleQueries,
+		handleOneQuery,
 	}
 }
 
@@ -228,6 +315,25 @@ type FiltersReturn<T extends BaseEntity, QB extends QBuilders> = {
 	) => Q
 	parseFilterExpression: (
 		field: keyof T['$inferSelect'],
-		[filterExpr, ...values]: [string, ...T['$inferSelect'][keyof T['$inferSelect']][]],
+		[filterExpr, ...values]: [
+			string,
+			...T['$inferSelect'][keyof T['$inferSelect']][],
+		],
 	) => SQLWrapper
+	handleQueries: <TResult, TRels extends WithRelations[] = []>(
+		query: QB,
+		queryOpts: QueryOpts<T, TResult, TRels>,
+		hooks?: {
+			beforeParse?: (q: QB) => QB
+			afterParse?: (data: TResult) => TResult
+		},
+	) => Effect.Effect<TResult>
+	handleOneQuery: <TResult, TRels extends WithRelations[] = []>(
+		query: QB,
+		queryOpts: FindOneOpts<T, TResult, TRels>,
+		hooks?: {
+			beforeParse?: (q: QB) => QB
+			afterParse?: (data: TResult) => TResult | null
+		},
+	) => Effect.Effect<TResult>
 }

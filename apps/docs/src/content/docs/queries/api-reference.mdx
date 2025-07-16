@@ -22,9 +22,9 @@ The Drizzle Service provides a comprehensive set of query operations that allow 
 | Method | Description |
 |--------|-------------|
 | `find(opts?)` | Retrieve all records with optional filtering and pagination |
-| `findOne(id)` | Find a single record by its primary key |
+| `findOne(id, opts?)` | Find a single record by its primary key |
 | `findBy(criteria, opts?)` | Find records matching specific criteria |
-| `findByField(field, value)` | Find records by a single field value |
+| `findByField(field, value, opts?)` | Find records by a single field value |
 | `count(criteria?)` | Count records matching optional criteria |
 
 ### Advanced Query Operations
@@ -63,6 +63,40 @@ All query operations support a comprehensive set of options for customizing the 
     cursor: {
       description: 'Cursor position for cursor-based pagination',
       type: 'Date | null',
+    },
+    relations: {
+      description: 'Related entities to include in the query',
+      type: 'WithRelations[]',
+    },
+    workspace: {
+      description: 'Workspace-based filtering for multi-tenant applications',
+      type: '{ field: keyof T, value: T[keyof T] }',
+    },
+    custom: {
+      description: 'Custom SQL conditions to apply',
+      type: 'SQL',
+    },
+    parse: {
+      description: 'Custom result transformation function',
+      type: '(data: T[]) => TResult',
+    }
+  }}
+/>
+
+## FindOne Options
+
+All query operations support a comprehensive set of options for customizing the query behavior:
+
+<Callout type="warning">
+  The `findOne` method requires the `id` parameter to be provided, which is the unique identifier of the record you want to retrieve. The `opts` parameter can include options like `relations`, `withDeleted`, and custom SQL conditions the opts will be first on the `queryBuilder` then the `where` clause with the id.
+</Callout>
+
+<TypeTable
+  type={{
+    withDeleted: {
+      description: 'Include soft-deleted records in results',
+      type: 'boolean',
+      default: 'false'
     },
     relations: {
       description: 'Related entities to include in the query',
@@ -197,6 +231,11 @@ Finds a single entity by its unique identifier.
       description: "The unique identifier of the entity",
       type: "IdType<T, TOpts>",
       required: true
+    },
+    opts: {
+      description: "Optional query options for filtering, sorting, and including relations",
+      type: "FindOptions<T, TResult, TRels>",
+      required: false
     }
   }}
 />
@@ -220,6 +259,13 @@ if (todo) {
 // Non-existent ID returns null
 const nonExistent = await todosService.findOne('non-existent-id')
 console.log(nonExistent) // null
+
+// With relations
+const todoWithRelations = await todosService.findOne('todo-123', {
+  relations: [{ type: 'left', table: user, sql: eq(todos.userId, user.id) }]
+})
+
+console.log('Todo with user relation:', todoWithRelations) // [{todos, users}, ...{todos, users}, ...]
 ```
 
 ## findBy()

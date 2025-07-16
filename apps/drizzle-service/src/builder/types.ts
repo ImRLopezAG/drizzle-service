@@ -22,6 +22,8 @@ export type SQLiteQb = SQLiteSelect
 export type PostgresQb = PgSelect
 export type QBuilders = SQLiteQb | PostgresQb
 
+export type BaseDatabase = SQLiteDb | PostgresDb
+
 export type Handler<T> = Promise<[ServiceError, null] | [null, T]>
 
 // Effect-specific error types
@@ -98,6 +100,18 @@ export type QueryOpts<
 		: (data: RelationType<T, TRels>[]) => TResult
 }
 
+export interface FindOneOpts<
+	T extends BaseEntity,
+	TResult = T['$inferSelect'],
+	TRelations extends WithRelations[] = [],
+> extends Omit<
+		QueryOpts<T, TResult, TRelations>,
+		'page' | 'limit' | 'orderBy' | 'cursor' | 'parse'
+	> {
+	parse?: TRelations['length'] extends 0
+		? (data: T['$inferSelect'] | null) => TResult | null
+		: (data: RelationType<T, TRelations>[] | null) => TResult | null
+}
 export interface WithRelations {
 	type: 'left' | 'inner' | 'right'
 	table: BaseEntity
@@ -163,8 +177,14 @@ export interface QueryOperations<
 	>(
 		opts?: QueryOpts<T, TResult, TRels>,
 	) => Promise<TResult>
-	findOne: <TResult = T['$inferSelect']>(
+	findOne: <
+		TRels extends WithRelations[] = [],
+		TResult = TRels['length'] extends 0
+			? T['$inferSelect']
+			: RelationType<T, TRels>,
+	>(
 		id: IdType<T, TOpts>,
+		opts?: FindOneOpts<T, TResult, TRels>,
 	) => Promise<TResult | null>
 	/**
 	 * @deprecated This method is similar to `findBy` and may be changed or removed in the future.
@@ -355,7 +375,7 @@ export interface BulkOperationResult<T, E extends BaseEntity> {
 }
 
 // Service builder function that each database adapter implements
-export type ServiceBuilderFn<DB> = <
+export type ServiceBuilderFn<DB extends BaseDatabase> = <
 	T extends BaseEntity,
 	TExtensions = Record<string, unknown>,
 >(
@@ -363,11 +383,6 @@ export type ServiceBuilderFn<DB> = <
 	entity: T,
 	opts?: ServiceOptions<T, TExtensions>,
 ) => Service<T, DB> & TExtensions
-
-// Main builder function signature - creates the repository factory
-export type CreateServiceBuilder = <DB>(
-	builderFn: ServiceBuilderFn<DB>,
-) => ServiceBuilderFn<DB>
 
 // Helper type to extract the table name from a BaseEntity
 type TableName<T extends BaseEntity> = T extends { _: { name: infer N } }

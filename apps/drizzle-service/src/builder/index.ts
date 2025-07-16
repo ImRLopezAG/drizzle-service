@@ -26,12 +26,7 @@ export function getTableName(table: any): string {
 }
 
 // Main repository builder function - Effect version
-export function createService<SqliteDb>(
-	builderFn: ServiceBuilderFn<SqliteDb>,
-): ServiceBuilderFn<SqliteDb> 
-export function createService<PostgresDb>(
-	builderFn: ServiceBuilderFn<PostgresDb>,
-): ServiceBuilderFn<PostgresDb>
+
 export function createService<DB extends PostgresDb | SQLiteDb>(
 	builderFn: ServiceBuilderFn<DB>,
 ): ServiceBuilderFn<DB> {

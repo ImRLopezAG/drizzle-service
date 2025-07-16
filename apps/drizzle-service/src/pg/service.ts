@@ -1,4 +1,4 @@
-import { createService, getTableName } from '@/builder'
+import { createService } from '@/builder'
 import {
 	createDatabaseError,
 	createNotFoundError,
@@ -16,9 +16,9 @@ import type {
 	MutationsBulkOperations,
 	PaginationResult,
 	PostgresDb,
-	PostgresQb,
 	QueryOperations,
 	QueryOpts,
+	FindOneOpts,
 	RelationType,
 	Service,
 	ServiceHooks,
@@ -30,6 +30,7 @@ import {
 	and,
 	count,
 	eq,
+	getTableName,
 	ilike,
 	inArray,
 	or,
@@ -58,14 +59,15 @@ export const createPostgresService = createService<PostgresDb>(
 			return (opts?.id as keyof typeof table) || ('id' as keyof typeof table)
 		}
 
-		const { withSoftDeleted, withOpts, parseFilterExpression } =
-			createFilters<T, PostgresQb>({
+		const { withOpts, parseFilterExpression, handleQueries, handleOneQuery } = createFilters<T>(
+			{
 				table,
 				handleILike: (column, value) => ilike(column, value),
 				soft,
 				defaultLimit,
 				maxLimit,
-			})
+			},
+		)
 
 		// Helper function to convert Promise-based hooks to Effect-based hooks
 
@@ -89,43 +91,6 @@ export const createPostgresService = createService<PostgresDb>(
 		// 🚀 QUERY OPERATIONS
 		// ===============================
 
-		function handleQueries<TResult, TRels extends WithRelations[] = []>(
-			query: PostgresQb,
-			queryOpts: QueryOpts<T, TResult, TRels>,
-			hooks?: {
-				beforeParse?: (q: PostgresQb) => PostgresQb
-				afterParse?: (data: TResult) => TResult
-			},
-		) {
-			return Effect.gen(function* () {
-				const { parse, ...opts } = queryOpts
-				const { beforeParse, afterParse } = hooks || {}
-				let q = withOpts(query, opts)
-
-				if (beforeParse) {
-					// @ts-ignore
-					q = beforeParse(q)
-				}
-
-				const data = yield* tryEffect(async () => await q)
-
-				// Apply custom parse function if provided
-				if (parse) {
-					return parse(
-						opts.relations && opts.relations.length > 0
-							? (data as RelationType<T, TRels>[])
-							: (data as T['$inferSelect'][]),
-					) as TResult
-				}
-
-				if (afterParse) {
-					return afterParse(data as TResult)
-				}
-
-				return data as TResult
-			})
-		}
-
 		const _queryOperations: QueryOperations<T, O> = {
 			find: <
 				TRels extends WithRelations[] = [],
@@ -138,19 +103,30 @@ export const createPostgresService = createService<PostgresDb>(
 				return handleError(handleQueries(createBaseQuery(), opts))
 			},
 
-			findOne: <TResult = T['$inferSelect']>(id: IdType<T, O>) => {
+			findOne: <
+				TRels extends WithRelations[] = [],
+				TResult = TRels['length'] extends 0
+					? T['$inferSelect']
+					: RelationType<T, TRels>,
+			>(
+				id: IdType<T, O>,
+				opts: FindOneOpts<T, TResult, TRels> = {},
+			) => {
+				const hasRelations = opts.relations && opts.relations.length > 0
 				return handleError(
-					Effect.gen(function* () {
-						const query = withSoftDeleted(createBaseQuery())
-						const idField = getIdField()
-						const result = yield* tryEffect(async () => {
-							const result = await query
-								.where(eq(table[idField] as SQLWrapper, id))
-								.limit(1)
-							return result[0] as TResult | undefined
-						})
-
-						return result || null
+					handleOneQuery(createBaseQuery(), opts, {
+						beforeParse(q) {
+							const query = q.where(eq(table[getIdField()] as SQLWrapper, id))
+							if (hasRelations) return query
+							return query.limit(1)
+						},
+						afterParse(data) {
+							const isArray = Array.isArray(data)
+							if (isArray && data.length === 0) return null
+							if (hasRelations) return data  as TResult
+							if (isArray) return data[0] as TResult
+							return data  as TResult
+						},
 					}),
 				)
 			},
@@ -158,7 +134,7 @@ export const createPostgresService = createService<PostgresDb>(
 			findWithCursor: <
 				TRels extends WithRelations[] = [],
 				TResult = TRels['length'] extends 0
-					? T['$inferSelect'][]
+					? PaginationResult<T['$inferSelect']>
 					: RelationType<T, TRels>[],
 			>(
 				opts: QueryOpts<T, TResult, TRels>,
@@ -180,11 +156,7 @@ export const createPostgresService = createService<PostgresDb>(
 
 						// Apply custom parse function if provided
 						if (parse) {
-							data = parse(
-								opts.relations && opts.relations.length > 0
-									? (data as RelationType<T, TRels>[])
-									: (data as T['$inferSelect'][]),
-							) as unknown as typeof data
+							data = parse(data) as unknown as typeof data
 						}
 
 						const pageSize = Math.min(opts.limit || defaultLimit, maxLimit)

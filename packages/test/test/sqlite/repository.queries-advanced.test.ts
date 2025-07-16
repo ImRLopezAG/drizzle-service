@@ -608,4 +608,93 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 			expect(todo.user.id).toBe(todo.userId)
 		}
 	})
+
+	it('should find a single record by id with custom parse', async () => {
+			const todo = await todosService.findOne(testIds.todoIds[0] ?? '', {
+				parse(data) {
+					if (!data) return null
+					return {
+						id: data.id,
+						title: data.title.toUpperCase(),
+					}
+				},
+			})
+			expect(todo).toBeDefined()
+			expect(todo?.id).toBe(testIds.todoIds[0] ?? '')
+			expect(typeof todo?.title).toBe('string')
+			expect(todo?.title).toBe(todo?.title.toUpperCase())
+		})
+	
+		it('should find a single record with custom SQL condition', async () => {
+			const todo = await todosService.findOne(testIds.todoIds[0] ?? '', {
+				custom: sql`title LIKE ${`%${uniquePrefix}%`}`,
+			})
+			expect(todo).toBeDefined()
+			expect(todo?.title).toContain(uniquePrefix)
+		})
+	
+		it('should find a single record with relations', async () => {
+			const todoWithUser = await todosService.findOne(testIds.todoIds[0] ?? '', {
+				relations: [
+					{ type: 'left', table: users, sql: eq(todos.userId, users.id) },
+				],
+				parse(data) {
+					if (!data) return null
+					const singleTodo = data[0]
+					if (!singleTodo) return null
+					return {
+						...singleTodo.todos,
+						user: singleTodo.users,
+					}
+				},
+			})
+			expect(todoWithUser).toBeDefined()
+			expect(todoWithUser?.user).toBeDefined()
+			expect(todoWithUser?.user.id).toBe(todoWithUser?.userId)
+		})
+	
+		it('should find a single record with multiple relations', async () => {
+			const todoWithUserTenant = await todosService.findOne(testIds.todoIds[0] ?? '', {
+				relations: [
+					{ type: 'left', table: users, sql: eq(todos.userId, users.id) },
+					{
+						type: 'left',
+						table: tenants,
+						sql: eq(todos.tenant, tenants.tenantId),
+					},
+				],
+				parse(data) {
+					if (!data) return null
+					const singleTodo = data[0]
+					if (!singleTodo) return null
+					const { todos: todo, users: user, tenants: tenant } = singleTodo
+					return {
+						...todo,
+						user,
+						tenantEntity: tenant,
+					}
+				},
+			})
+	
+			console.log('todoWithUserTenant', todoWithUserTenant)
+			expect(todoWithUserTenant).toBeDefined()
+			expect(todoWithUserTenant?.user).toBeDefined()
+			expect(todoWithUserTenant?.tenant).toBeDefined()
+			expect(todoWithUserTenant?.user.id).toBe(todoWithUserTenant?.userId)
+			expect(todoWithUserTenant?.tenantEntity.tenantId).toBe(todoWithUserTenant?.tenant)
+		})
+	
+		it('should return null for non-existent id', async () => {
+			const todo = await todosService.findOne('999999', {})
+			expect(todo).toBeNull()
+		})
+	
+		it('should support custom parse returning null', async () => {
+			const todo = await todosService.findOne(testIds.todoIds[0] ?? '', {
+				parse() {
+					return null
+				},
+			})
+			expect(todo).toBeNull()
+		})
 })
