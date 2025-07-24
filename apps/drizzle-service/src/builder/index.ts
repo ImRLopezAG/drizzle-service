@@ -1,7 +1,6 @@
 import {
-	type Column,
-	type SQLWrapper,
 	and,
+	type Column,
 	eq,
 	gt,
 	gte,
@@ -10,22 +9,15 @@ import {
 	lt,
 	lte,
 	ne,
+	type SQLWrapper,
 	sql,
 } from 'drizzle-orm'
-import type { BaseEntity, PostgresDb, ServiceBuilderFn, SQLiteDb } from './types'
-
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-export function getTableName(table: any): string {
-	// Find the Symbol that contains "drizzle:BaseName" in its description
-	const baseNameSymbol = Object.getOwnPropertySymbols(table).find((sym) =>
-		sym.description?.includes('drizzle:BaseName'),
-	)
-
-	// Return the value if the symbol exists, otherwise return "unknown"
-	return baseNameSymbol ? table[baseNameSymbol] : 'unknown'
-}
-
-// Main repository builder function - Effect version
+import type {
+	BaseEntity,
+	PostgresDb,
+	ServiceBuilderFn,
+	SQLiteDb,
+} from './types'
 
 export function createService<DB extends PostgresDb | SQLiteDb>(
 	builderFn: ServiceBuilderFn<DB>,

@@ -1,3 +1,32 @@
+import { createFilters } from '@builder/filters'
+import type {
+	BulkOperationResult,
+	FilterCriteria,
+	FindOneOpts,
+	IdType,
+	MutationOperations,
+	MutationsBulkOperations,
+	PaginationResult,
+	PostgresDb,
+	QueryOperations,
+	QueryOpts,
+	RelationType,
+	Service,
+	ServiceHooks,
+	ServiceMethods,
+	WithRelations,
+} from '@builder/types'
+import {
+	and,
+	count,
+	eq,
+	getTableName,
+	ilike,
+	inArray,
+	or,
+	type SQLWrapper,
+} from 'drizzle-orm'
+import { Effect } from 'effect'
 import { createService } from '@/builder'
 import {
 	createDatabaseError,
@@ -8,36 +37,6 @@ import {
 	tryEffect,
 	tryHandleError,
 } from '@/helpers'
-import type {
-	BulkOperationResult,
-	FilterCriteria,
-	IdType,
-	MutationOperations,
-	MutationsBulkOperations,
-	PaginationResult,
-	PostgresDb,
-	QueryOperations,
-	QueryOpts,
-	FindOneOpts,
-	RelationType,
-	Service,
-	ServiceHooks,
-	ServiceMethods,
-	WithRelations,
-} from '@builder/types'
-import {
-	type SQLWrapper,
-	and,
-	count,
-	eq,
-	getTableName,
-	ilike,
-	inArray,
-	or,
-} from 'drizzle-orm'
-import { Effect } from 'effect'
-
-import { createFilters } from '@builder/filters'
 
 export const createPostgresService = createService<PostgresDb>(
 	(db, table, opts) => {
@@ -56,18 +55,17 @@ export const createPostgresService = createService<PostgresDb>(
 		const entityName = getTableName(table)
 
 		function getIdField(): keyof typeof table {
-			return (opts?.id as keyof typeof table) || ('id' as keyof typeof table)
+			return (id as keyof typeof table) || ('id' as keyof typeof table)
 		}
 
-		const { withOpts, parseFilterExpression, handleQueries, handleOneQuery } = createFilters<T>(
-			{
+		const { withOpts, parseFilterExpression, handleQueries, handleOneQuery } =
+			createFilters<T>({
 				table,
 				handleILike: (column, value) => ilike(column, value),
 				soft,
 				defaultLimit,
 				maxLimit,
-			},
-		)
+			})
 
 		// Helper function to convert Promise-based hooks to Effect-based hooks
 
@@ -123,9 +121,9 @@ export const createPostgresService = createService<PostgresDb>(
 						afterParse(data) {
 							const isArray = Array.isArray(data)
 							if (isArray && data.length === 0) return null
-							if (hasRelations) return data  as TResult
+							if (hasRelations) return data as TResult
 							if (isArray) return data[0] as TResult
-							return data  as TResult
+							return data as TResult
 						},
 					}),
 				)

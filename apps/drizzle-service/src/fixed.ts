@@ -1,24 +1,4 @@
-import {
-	createDatabaseError,
-	createNotFoundError,
-	executeHooks,
-	handleError,
-	handleOptionalErrorHook,
-	tryEffect,
-	tryHandleError,
-} from '@/helpers'
 import { createFilters } from '@builder/filters'
-import {
-	type SQL,
-	type SQLWrapper,
-	and,
-	eq,
-	getTableName,
-	ilike,
-	inArray,
-	or,
-} from 'drizzle-orm'
-import { Effect } from 'effect'
 import type {
 	BaseDatabase,
 	BaseEntity,
@@ -32,18 +12,37 @@ import type {
 	QueryOperations,
 	QueryOpts,
 	RelationType,
-	SQLiteDb,
 	Service,
 	ServiceBuilderFn,
 	ServiceHooks,
 	ServiceMethods,
 	ServiceOptions,
+	SQLiteDb,
 	WithRelations,
 } from '@builder/types'
-
+import {
+	and,
+	eq,
+	getTableName,
+	ilike,
+	inArray,
+	or,
+	type SQL,
+	type SQLWrapper,
+} from 'drizzle-orm'
 import { PgDatabase } from 'drizzle-orm/pg-core'
 import { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core'
+import { Effect } from 'effect'
 import { sqliteIlike } from '@/builder'
+import {
+	createDatabaseError,
+	createNotFoundError,
+	executeHooks,
+	handleError,
+	handleOptionalErrorHook,
+	tryEffect,
+	tryHandleError,
+} from '@/helpers'
 
 export function createService<TDb extends PostgresDb>(): ServiceBuilderFn<TDb>
 export function createService<TDb extends SQLiteDb>(): ServiceBuilderFn<TDb>
@@ -67,7 +66,7 @@ export function createService<
 		const entityName = getTableName(table)
 
 		function getIdField(): keyof typeof table {
-			return (opts?.id as keyof typeof table) || ('id' as keyof typeof table)
+			return (id as keyof typeof table) || ('id' as keyof typeof table)
 		}
 
 		function insertStatement(values: T['$inferInsert']) {
@@ -124,14 +123,14 @@ export function createService<
 			createFilters<T>({
 				table,
 				handleILike: (column, value) => {
-          if (db instanceof PgDatabase) {
-            return ilike(column, value)
-          }
-          if (db instanceof BaseSQLiteDatabase) {
-            return sqliteIlike(column, value)
-          }
-          throw new Error('Unsupported database')
-        },
+					if (db instanceof PgDatabase) {
+						return ilike(column, value)
+					}
+					if (db instanceof BaseSQLiteDatabase) {
+						return sqliteIlike(column, value)
+					}
+					throw new Error('Unsupported database')
+				},
 				soft,
 				defaultLimit,
 				maxLimit,
@@ -1153,34 +1152,31 @@ export function createService<
 	}
 }
 
-
-
-
 export function drizzleService<D extends BaseDatabase>(
-  db: D,
+	db: D,
 ): {
-  <
-    T extends BaseEntity & { $inferSelect: { id: string } },
-    TExtensions extends Record<string, unknown> = Record<string, unknown>,
-  >(
-    table: T,
-    opts?: ServiceOptions<T, TExtensions>,
-  ): Service<T, D> & TExtensions
-  <
-    T extends BaseEntity,
-    TExtensions extends Record<string, unknown> = Record<string, unknown>,
-  >(
-    table: T,
-    opts: ServiceOptions<T, TExtensions>,
-  ): Service<T, D> & TExtensions
+	<
+		T extends BaseEntity & { $inferSelect: { id: string } },
+		TExtensions extends Record<string, unknown> = Record<string, unknown>,
+	>(
+		table: T,
+		opts?: ServiceOptions<T, TExtensions>,
+	): Service<T, D> & TExtensions
+	<
+		T extends BaseEntity,
+		TExtensions extends Record<string, unknown> = Record<string, unknown>,
+	>(
+		table: T,
+		opts: ServiceOptions<T, TExtensions>,
+	): Service<T, D> & TExtensions
 }
 export function drizzleService<D extends BaseDatabase>(db: D) {
-  const service = createService<D>()
-  return <
-    T extends BaseEntity,
-    TExtensions extends Record<string, unknown> = Record<string, unknown>,
-  >(
-    table: T,
-    opts?: ServiceOptions<T, TExtensions>,
-  ) => service(db, table, opts)
+	const service = createService<D>()
+	return <
+		T extends BaseEntity,
+		TExtensions extends Record<string, unknown> = Record<string, unknown>,
+	>(
+		table: T,
+		opts?: ServiceOptions<T, TExtensions>,
+	) => service(db, table, opts)
 }

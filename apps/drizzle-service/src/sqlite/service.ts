@@ -1,5 +1,32 @@
+import { createFilters } from '@builder/filters'
+import type {
+	BulkOperationResult,
+	FilterCriteria,
+	FindOneOpts,
+	IdType,
+	MutationOperations,
+	MutationsBulkOperations,
+	PaginationResult,
+	QueryOperations,
+	QueryOpts,
+	RelationType,
+	Service,
+	ServiceHooks,
+	ServiceMethods,
+	SQLiteDb,
+	WithRelations,
+} from '@builder/types'
+import {
+	and,
+	count,
+	eq,
+	getTableName,
+	inArray,
+	or,
+	type SQLWrapper,
+} from 'drizzle-orm'
+import { Effect } from 'effect'
 import { createService, sqliteIlike } from '@/builder'
-
 import {
 	createDatabaseError,
 	createNotFoundError,
@@ -9,34 +36,6 @@ import {
 	tryEffect,
 	tryHandleError,
 } from '@/helpers'
-import { createFilters } from '@builder/filters'
-import type {
-	BulkOperationResult,
-	FilterCriteria,
-	IdType,
-	MutationOperations,
-	MutationsBulkOperations,
-	PaginationResult,
-	QueryOperations,
-	QueryOpts,
-	RelationType,
-	SQLiteDb,
-	FindOneOpts,
-	Service,
-	ServiceHooks,
-	ServiceMethods,
-	WithRelations,
-} from '@builder/types'
-import {
-	type SQLWrapper,
-	and,
-	count,
-	eq,
-	getTableName,
-	inArray,
-	or,
-} from 'drizzle-orm'
-import { Effect } from 'effect'
 
 export const createSqliteService = createService<SQLiteDb>(
 	(db, table, opts) => {
@@ -55,18 +54,17 @@ export const createSqliteService = createService<SQLiteDb>(
 		const entityName = getTableName(table)
 
 		function getIdField(): keyof typeof table {
-			return (opts?.id as keyof typeof table) || ('id' as keyof typeof table)
+			return (id as keyof typeof table) || ('id' as keyof typeof table)
 		}
 
-		const { withOpts, parseFilterExpression, handleQueries, handleOneQuery } = createFilters<T>(
-			{
+		const { withOpts, parseFilterExpression, handleQueries, handleOneQuery } =
+			createFilters<T>({
 				table,
 				soft,
 				defaultLimit,
 				maxLimit,
 				handleILike: sqliteIlike,
-			},
-		)
+			})
 
 		// Helper function to split array into batches
 		function createBatches<T>(array: T[], batchSize: number): T[][] {
@@ -103,11 +101,11 @@ export const createSqliteService = createService<SQLiteDb>(
 			findOne: <
 				TRels extends WithRelations[] = [],
 				TResult = TRels['length'] extends 0
-					? T['$inferSelect'] 
+					? T['$inferSelect']
 					: RelationType<T, TRels>,
 			>(
 				id: IdType<T, O>,
-				opts: FindOneOpts<T, TResult , TRels> = {},
+				opts: FindOneOpts<T, TResult, TRels> = {},
 			) => {
 				const hasRelations = opts.relations && opts.relations.length > 0
 				return handleError(
@@ -120,9 +118,9 @@ export const createSqliteService = createService<SQLiteDb>(
 						afterParse(data) {
 							const isArray = Array.isArray(data)
 							if (isArray && data.length === 0) return null
-							if (hasRelations) return data  as TResult
-							if (isArray) return data[0]  as TResult
-							return data  as TResult
+							if (hasRelations) return data as TResult
+							if (isArray) return data[0] as TResult
+							return data as TResult
 						},
 					}),
 				)

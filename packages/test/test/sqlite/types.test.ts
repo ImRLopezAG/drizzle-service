@@ -4,10 +4,10 @@ import type {
 	MutationOperations,
 	MutationsBulkOperations,
 	QueryOperations,
-	SQLiteDb,
 	Service,
 	ServiceHooks,
 	ServiceMethods,
+	SQLiteDb,
 } from 'drizzle-service/builder/types.d.ts'
 import { describe, expectTypeOf, it } from 'vitest'
 import { service, todos, users } from './schema'

@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
-	type UserWithTodos,
 	createTodo,
 	testIds,
 	todosService,
+	type UserWithTodos,
 	uniquePrefix,
 	userService,
 } from './repository'

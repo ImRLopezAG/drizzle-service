@@ -1,39 +1,39 @@
 {
-  "name": "@repo/tests",
-  "module": "src/index.ts",
-  "type": "module",
-  "version": "0.1.0",
-  "scripts": {
-    "test": "vitest run",
-    "test:full": "vitest run",
-    "test:bun": "bun test repository --coverage",
-    "test:watch": "vitest --reporter=verbose --watch",
-    "lint": "biome check .",
-    "lint:unsafe": "biome check --write --unsafe .",
-    "lint:write": "biome check --write .",
-    "db:push": "drizzle-kit push",
-    "db:push:pg": "drizzle-kit push --config ./drizzle.config.pg.ts",
-    "db:push:sqlite": "drizzle-kit push --config ./drizzle.config.sqlite.ts",
-    "db:studio": "drizzle-kit studio",
-    "db:studio:pg": "drizzle-kit studio --config ./drizzle.config.pg.ts",
-    "db:studio:sqlite": "drizzle-kit studio --config ./drizzle.config.sqlite.ts"
-  },
-  "dependencies": {
-    "drizzle-orm": "^0.44.2",
-    "drizzle-service": "workspace:*"
-  },
-  "devDependencies": {
-    "@electric-sql/pglite": "^0.3.4",
-    "@libsql/client": "^0.15.9",
-    "@types/bun": "latest",
-    "drizzle-kit": "^0.31.4",
-    "drizzle-zod": "^0.8.2",
-    "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^3.2.4",
-    "zod": "^3.25.67"
-  },
-  "peerDependencies": {
-    "drizzle-orm": "^0.44.2",
-    "typescript": "^5.8"
-  }
+	"name": "@repo/tests",
+	"module": "src/index.ts",
+	"type": "module",
+	"version": "0.1.0",
+	"scripts": {
+		"test": "vitest run",
+		"test:full": "vitest run",
+		"test:bun": "bun test repository --coverage",
+		"test:watch": "vitest --reporter=verbose --watch",
+		"lint": "biome check .",
+		"lint:unsafe": "biome check --write --unsafe .",
+		"lint:write": "biome check --write .",
+		"db:push": "drizzle-kit push",
+		"db:push:pg": "drizzle-kit push --config ./drizzle.config.pg.ts",
+		"db:push:sqlite": "drizzle-kit push --config ./drizzle.config.sqlite.ts",
+		"db:studio": "drizzle-kit studio",
+		"db:studio:pg": "drizzle-kit studio --config ./drizzle.config.pg.ts",
+		"db:studio:sqlite": "drizzle-kit studio --config ./drizzle.config.sqlite.ts"
+	},
+	"dependencies": {
+		"drizzle-orm": "^0.44.2",
+		"drizzle-service": "workspace:*"
+	},
+	"devDependencies": {
+		"@electric-sql/pglite": "^0.3.4",
+		"@libsql/client": "^0.15.9",
+		"@types/bun": "latest",
+		"drizzle-kit": "^0.31.4",
+		"drizzle-zod": "^0.8.2",
+		"vite-tsconfig-paths": "^5.1.4",
+		"vitest": "^3.2.4",
+		"zod": "^3.25.67"
+	},
+	"peerDependencies": {
+		"drizzle-orm": "^0.44.2",
+		"typescript": "^5.8"
+	}
 }

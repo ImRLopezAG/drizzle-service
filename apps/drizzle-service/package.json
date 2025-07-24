@@ -1,93 +1,93 @@
 {
-  "name": "drizzle-service",
-  "module": "lib/index.js",
-  "type": "module",
-  "version": "0.0.9",
-  "description": "A service for managing Drizzle ORM entities with advanced CRUD operations, pagination, soft deletes, relations, and bulk operations full type-safe",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
-  "author": {
-    "name": "Angel Lopez",
-    "email": "contact@imrlopez.dev"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ImRLopezAG/drizzle-service.git"
-  },
-  "homepage": "https://drizzle-service-docs.vercel.app/",
-  "typesVersions": {
-    "*": {
-      "pg": [
-        "lib/pg/index.d.ts"
-      ],
-      "sqlite": [
-        "lib/sqlite/index.d.ts"
-      ],
-      "builder/*": [
-        "lib/builder/*.d.ts"
-      ],
-      "helpers": [
-        "lib/helpers.d.ts"
-      ]
-    }
-  },
-  "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "import": "./lib/index.js",
-      "require": "./lib/index.js"
-    },
-    "./pg": {
-      "types": "./lib/pg/index.d.ts",
-      "import": "./lib/pg/index.js",
-      "require": "./lib/pg/index.js"
-    },
-    "./sqlite": {
-      "types": "./lib/sqlite/index.d.ts",
-      "import": "./lib/sqlite/index.js",
-      "require": "./lib/sqlite/index.js"
-    },
-    "./builder/*": {
-      "types": "./lib/builder/*.d.ts",
-      "import": "./lib/builder/*",
-      "require": "./lib/builder/*"
-    },
-    "./helpers": {
-      "types": "./lib/helpers.d.ts",
-      "import": "./lib/helpers.js",
-      "require": "./lib/helpers.js"
-    }
-  },
-  "files": [
-    "lib/**/*.js",
-    "lib/**/*.cjs",
-    "lib/**/*.d.ts",
-    "lib/**/*.d.cts"
-  ],
-  "keywords": [
-    "drizzle-orm",
-    "typescript",
-    "repository",
-    "react",
-    "nextjs"
-  ],
-  "scripts": {
-    "build": "tsup",
-    "lint": "biome check .",
-    "lint:unsafe": "biome check --write --unsafe .",
-    "lint:write": "biome check --write ."
-  },
-  "devDependencies": {
-    "@repo/type-config": "workspace:*",
-    "tsup": "^8.5.0"
-  },
-  "peerDependencies": {
-    "drizzle-orm": "^0.44.2",
-    "typescript": "^5"
-  },
-  "dependencies": {
-    "effect": "^3.16.13"
-  },
-  "packageManager": "pnpm@10.12.0"
+	"name": "drizzle-service",
+	"module": "lib/index.js",
+	"type": "module",
+	"version": "0.0.9",
+	"description": "A service for managing Drizzle ORM entities with advanced CRUD operations, pagination, soft deletes, relations, and bulk operations full type-safe",
+	"main": "lib/index.js",
+	"types": "lib/index.d.ts",
+	"author": {
+		"name": "Angel Lopez",
+		"email": "contact@imrlopez.dev"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/ImRLopezAG/drizzle-service.git"
+	},
+	"homepage": "https://drizzle-service-docs.vercel.app/",
+	"typesVersions": {
+		"*": {
+			"pg": [
+				"lib/pg/index.d.ts"
+			],
+			"sqlite": [
+				"lib/sqlite/index.d.ts"
+			],
+			"builder/*": [
+				"lib/builder/*.d.ts"
+			],
+			"helpers": [
+				"lib/helpers.d.ts"
+			]
+		}
+	},
+	"exports": {
+		".": {
+			"types": "./lib/index.d.ts",
+			"import": "./lib/index.js",
+			"require": "./lib/index.js"
+		},
+		"./pg": {
+			"types": "./lib/pg/index.d.ts",
+			"import": "./lib/pg/index.js",
+			"require": "./lib/pg/index.js"
+		},
+		"./sqlite": {
+			"types": "./lib/sqlite/index.d.ts",
+			"import": "./lib/sqlite/index.js",
+			"require": "./lib/sqlite/index.js"
+		},
+		"./builder/*": {
+			"types": "./lib/builder/*.d.ts",
+			"import": "./lib/builder/*",
+			"require": "./lib/builder/*"
+		},
+		"./helpers": {
+			"types": "./lib/helpers.d.ts",
+			"import": "./lib/helpers.js",
+			"require": "./lib/helpers.js"
+		}
+	},
+	"files": [
+		"lib/**/*.js",
+		"lib/**/*.cjs",
+		"lib/**/*.d.ts",
+		"lib/**/*.d.cts"
+	],
+	"keywords": [
+		"drizzle-orm",
+		"typescript",
+		"repository",
+		"react",
+		"nextjs"
+	],
+	"scripts": {
+		"build": "tsup",
+		"lint": "biome check .",
+		"lint:unsafe": "biome check --write --unsafe .",
+		"lint:write": "biome check --write ."
+	},
+	"devDependencies": {
+		"@repo/type-config": "workspace:*",
+		"tsup": "^8.5.0"
+	},
+	"peerDependencies": {
+		"drizzle-orm": "^0.44.2",
+		"typescript": "^5"
+	},
+	"dependencies": {
+		"effect": "^3.16.13"
+	},
+	"packageManager": "pnpm@10.12.0"
 }

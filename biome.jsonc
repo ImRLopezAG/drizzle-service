@@ -1,35 +1,23 @@
 {
-	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.1.2/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
 		"useIgnoreFile": true
 	},
 	"files": {
-		"ignoreUnknown": false,
-		"ignore": [
-			"node_modules",
-			"dist",
-			"build",
-			"coverage",
-			"*.log",
-			"*.lock",
-			"*.cache",
-			"*.gen.*"
-		]
+		"ignoreUnknown": false
 	},
 	"formatter": {
 		"enabled": true,
 		"bracketSpacing": true
 	},
-	"organizeImports": {
-		"enabled": true
-	},
 	"javascript": {
 		"formatter": {
 			"semicolons": "asNeeded",
 			"jsxQuoteStyle": "single",
-			"quoteStyle": "single"
+			"quoteStyle": "single",
+			"enabled": true
 		},
 		"linter": {
 			"enabled": true
@@ -49,10 +37,8 @@
 			},
 			"suspicious": {
 				"noArrayIndexKey": {
-					"level": "off"
-				},
-				"noExplicitAny": {
-					"level": "warn"
+					"level": "off",
+					"options": {}
 				}
 			},
 			"a11y": {
@@ -64,11 +50,13 @@
 			"correctness": {
 				"noUnusedVariables": {
 					"fix": "safe",
-					"level": "warn"
+					"level": "warn",
+					"options": {}
 				},
 				"noUnusedImports": {
 					"fix": "unsafe",
-					"level": "warn"
+					"level": "warn",
+					"options": {}
 				},
 				"useExhaustiveDependencies": "off"
 			},

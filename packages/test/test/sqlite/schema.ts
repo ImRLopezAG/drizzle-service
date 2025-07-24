@@ -1,7 +1,7 @@
-import  { drizzleService } from 'drizzle-service/sqlite'
 import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
 import { sqliteTable, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { drizzleService } from 'drizzle-service/sqlite'
 
 const tenants = sqliteTable('tenants', (t) => ({
 	tenantId: t.integer('id').primaryKey(),

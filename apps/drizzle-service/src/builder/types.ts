@@ -1,21 +1,16 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: Any for flexibility */
 import type { Column, SQL, Table } from 'drizzle-orm'
 import type { PgDatabase, PgSelect } from 'drizzle-orm/pg-core'
 import type { BaseSQLiteDatabase, SQLiteSelect } from 'drizzle-orm/sqlite-core'
 // Base entity interface that all tables must implement
 export interface BaseEntity extends Table {
-	// Optional ID field - repositories must specify the ID field if not present
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle requires any for column types
 	id?: Column<any>
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle requires any for column types
 	createdAt: Column<any>
-	// biome-ignore lint/suspicious/noExplicitAny: Drizzle requires any for column types
 	updatedAt: Column<any>
 }
 
 // Database-specific types
-// biome-ignore lint/suspicious/noExplicitAny: Drizzle database types require any for schema generics
 export type SQLiteDb = BaseSQLiteDatabase<any, any, any, any>
-// biome-ignore lint/suspicious/noExplicitAny: Drizzle database types require any for schema generics
 export type PostgresDb = PgDatabase<any, any, any>
 // Query builder types for each database
 export type SQLiteQb = SQLiteSelect
