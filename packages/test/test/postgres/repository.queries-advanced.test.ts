@@ -1,4 +1,4 @@
-import { and, eq, gt, like, lt, or, sql } from 'drizzle-orm'
+import { and, eq, gt, like, lt, ne, or, sql } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
 	createTodo,
@@ -14,6 +14,7 @@ import { setupBeforeAll } from './test-setup'
 setupBeforeAll()
 
 describe('PG Service: Query Operations (With Options)', () => {
+	// Create test data needed for advanced query tests
 	const START_WITH_PREFIX = 'starting'
 	const END_WITH_PREFIX = 'ending'
 	const CONTAINS_PREFIX = 'contains'
@@ -297,7 +298,7 @@ describe('PG Service: Query Operations (With Options)', () => {
 		const todosWithSearch = await todosService.find({
 			custom: and(
 				like(sql`title`, `%${searchString}%`),
-				gt(sql`created_at`, cutoffDate.toISOString()), // Convert to ISO string for PostgreSQL
+				gt(sql`created_at`, Math.floor(cutoffDate.getTime() / 1000)), // Convert to Unix timestamp for PG
 			),
 		})
 
@@ -791,5 +792,40 @@ describe('PG Service: Query Operations (With Options)', () => {
 		expect(
 			todosContaining.every((todo) => todo.title.includes(CONTAINS_PREFIX)),
 		).toBe(true)
+	})
+
+	it('should handle find by with custom ne', async () => {
+		const todosWithMatching = await todosService.findBy(
+			{
+				status: 'done',
+			},
+			{
+				custom: ne(todos.priority, 'medium'),
+			},
+		)
+
+		expect(todosWithMatching).toBeInstanceOf(Array)
+		expect(todosWithMatching.length).toBeGreaterThan(0)
+		expect(
+			todosWithMatching.every((todo) => !todo.priority.includes('medium')),
+		).toBe(true)
+	})
+
+	it('should handle find by matching with custom ne', async () => {
+		const todosWithMatching = await todosService.findByMatching(
+			{
+				status: 'todo',
+				label: 'documentation',
+			},
+			{
+				custom: ne(todos.priority, 'high'),
+			},
+		)
+
+		expect(todosWithMatching).toBeInstanceOf(Array)
+		expect(todosWithMatching.length).toBeGreaterThan(0)
+		expect(todosWithMatching.every((todo) => todo.priority !== 'high')).toBe(
+			true,
+		)
 	})
 })

@@ -1,4 +1,4 @@
-import { and, eq, gt, like, lt, or, sql } from 'drizzle-orm'
+import { and, eq, gt, like, lt, ne, or, sql } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
 	createTodo,
@@ -109,7 +109,13 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 
 		const names = users.map((user) => user.name)
 
-		const sorted = names.toSorted((a, b) => b.localeCompare(a, undefined, { sensitivity: 'base', numeric: true, localeMatcher: 'best fit' }))
+		const sorted = names.toSorted((a, b) =>
+			b.localeCompare(a, undefined, {
+				sensitivity: 'base',
+				numeric: true,
+				localeMatcher: 'best fit',
+			}),
+		)
 		expect(names).toEqual(sorted)
 	})
 
@@ -786,5 +792,40 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 		expect(
 			todosContaining.every((todo) => todo.title.includes(CONTAINS_PREFIX)),
 		).toBe(true)
+	})
+
+	it('should handle find by with custom ne', async () => {
+		const todosWithMatching = await todosService.findBy(
+			{
+				status: 'done',
+			},
+			{
+				custom: ne(todos.priority, 'medium'),
+			},
+		)
+
+		expect(todosWithMatching).toBeInstanceOf(Array)
+		expect(todosWithMatching.length).toBeGreaterThan(0)
+		expect(
+			todosWithMatching.every((todo) => !todo.priority.includes('medium')),
+		).toBe(true)
+	})
+
+	it('should handle find by matching with custom ne', async () => {
+		const todosWithMatching = await todosService.findByMatching(
+			{
+				status: 'todo',
+				label: 'documentation',
+			},
+			{
+				custom: ne(todos.priority, 'high'),
+			},
+		)
+
+		expect(todosWithMatching).toBeInstanceOf(Array)
+		expect(todosWithMatching.length).toBeGreaterThan(0)
+		expect(todosWithMatching.every((todo) => todo.priority !== 'high')).toBe(
+			true,
+		)
 	})
 })

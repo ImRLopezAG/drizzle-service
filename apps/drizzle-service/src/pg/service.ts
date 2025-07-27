@@ -260,8 +260,12 @@ export const createPostgresService = createService<PostgresDb>(
 						opts.caseSensitive,
 					)
 				})
+				const { custom, ...restOpts } = opts
+				if (custom) {
+					conditions.push(custom)
+				}
 				return handleError(
-					handleQueries<TResult, TRels>(createBaseQuery(), opts, {
+					handleQueries<TResult, TRels>(createBaseQuery(), restOpts, {
 						beforeParse(q) {
 							return q.where(and(...conditions))
 						},
@@ -293,10 +297,13 @@ export const createPostgresService = createService<PostgresDb>(
 						opts.caseSensitive,
 					)
 				})
-
+				const { custom, ...restOpts } = opts
+				
 				return handleError(
-					handleQueries<TResult, TRels>(createBaseQuery(), opts, {
+					handleQueries<TResult, TRels>(createBaseQuery(), restOpts, {
 						beforeParse(q) {
+							if (custom) 
+								return q.where(and(or(...conditions), custom))
 							return q.where(or(...conditions))
 						},
 					}),

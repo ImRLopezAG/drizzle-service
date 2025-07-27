@@ -5,7 +5,7 @@ import {
 	uniquePrefix,
 	userData,
 	userService,
-} from '../sqlite/repository'
+} from './repository'
 
 // Track if setup has been completed to avoid duplicate setup
 let isSetupComplete = false
@@ -59,32 +59,38 @@ export async function setupTestData() {
 			throw new Error('Failed to create test tenant')
 		}
 
-		// Now create the user with the correct tenant ID
-		const [userError, user] = await userService.create(userData)
-
-		if (userError) {
-			// If it's a duplicate key error, try to find existing user
-			const errorMessage =
-				userError instanceof Error ? userError.message : String(userError)
-			if (
-				errorMessage.includes('duplicate key') ||
-				errorMessage.includes('unique constraint')
-			) {
-				const existingUsers = await userService.findBy({
-					email: `${uniquePrefix}@example.com`,
-				})
-				if (existingUsers.length > 0 && existingUsers[0]) {
-					testIds.userId = existingUsers[0].id
-				} else {
-					throw new Error('Failed to create or find test user')
-				}
-			} else {
-				throw userError
+		// Create at least 10 users for testing
+		for (let i = 0; i < 10; i++) {
+			const userPayload = {
+				...userData,
+				email: `${uniquePrefix}+${i}@example.com`,
+				name: `Test User ${i}`,
 			}
-		} else if (user) {
-			testIds.userId = user.id
-		} else {
-			throw new Error('Failed to create test user')
+			const [userError, user] = await userService.create(userPayload)
+
+			if (userError) {
+				const errorMessage =
+					userError instanceof Error ? userError.message : String(userError)
+				if (
+					errorMessage.includes('duplicate key') ||
+					errorMessage.includes('unique constraint')
+				) {
+					const existingUsers = await userService.findBy({
+						email: userPayload.email,
+					})
+					if (existingUsers.length > 0 && existingUsers[0]) {
+						if (i === 0) testIds.userId = existingUsers[0].id
+					} else {
+						throw new Error(`Failed to create or find test user ${i}`)
+					}
+				} else {
+					throw userError
+				}
+			} else if (user) {
+				if (i === 0) testIds.userId = user.id
+			} else {
+				throw new Error(`Failed to create test user ${i}`)
+			}
 		}
 
 		// Mark setup as complete

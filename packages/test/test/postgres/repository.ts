@@ -3,7 +3,7 @@ import { expect } from 'vitest'
 import { z } from 'zod/v4'
 import { service, tenants, todos, users } from './schema'
 
-const timestamp = performance.now()
+const timestamp = Date.now()
 const uniquePrefix = `Test-${timestamp}`
 
 const userService = service(users, {
@@ -59,7 +59,7 @@ const testIds = {
 const createTodo = async (
 	index = 0,
 	priority: 'low' | 'medium' | 'high' = 'medium',
-	status: 'todo' | 'backlog' | 'in-progress' | 'done' = 'todo',
+	status: 'todo' | 'backlog' | 'in-progress' | 'done' = 'todo'
 ) => {
 	const [error, todo] = await todosService.create({
 		title: `${uniquePrefix}-Todo-${index}`,
@@ -81,7 +81,6 @@ const createTodo = async (
 	}
 	throw new Error('Failed to create todo')
 }
-
 
 export const createTodoWithMatching = async (
 	prefix: string,	

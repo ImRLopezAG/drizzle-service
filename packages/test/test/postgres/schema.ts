@@ -2,7 +2,6 @@ import { PGlite } from '@electric-sql/pglite'
 import { pgEnum, pgTableCreator, uniqueIndex } from 'drizzle-orm/pg-core'
 import { drizzle } from 'drizzle-orm/pglite'
 import { drizzleService } from 'drizzle-service/pg'
-
 const pgTable = pgTableCreator((name) => `ps_${name}`)
 
 export const statusEnum = pgEnum('status', [

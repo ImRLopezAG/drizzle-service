@@ -261,8 +261,12 @@ export const createSqliteService = createService<SQLiteDb>(
 						opts.caseSensitive,
 					)
 				})
+				const { custom, ...restOpts } = opts
+				if (custom) {
+					conditions.push(custom)
+				}
 				return handleError(
-					handleQueries<TResult, TRels>(createBaseQuery(), opts, {
+					handleQueries<TResult, TRels>(createBaseQuery(), restOpts, {
 						beforeParse(q) {
 							return q.where(and(...conditions))
 						},
@@ -294,10 +298,12 @@ export const createSqliteService = createService<SQLiteDb>(
 						opts.caseSensitive,
 					)
 				})
+				const { custom, ...restOpts } = opts
 
 				return handleError(
-					handleQueries<TResult, TRels>(createBaseQuery(), opts, {
+					handleQueries<TResult, TRels>(createBaseQuery(), restOpts, {
 						beforeParse(q) {
+							if (custom) return q.where(and(or(...conditions), custom))
 							return q.where(or(...conditions))
 						},
 					}),
@@ -466,7 +472,7 @@ export const createSqliteService = createService<SQLiteDb>(
 									set: data,
 									setWhere: eq(
 										table[getIdField()] as SQLWrapper,
-										data[getIdField() as keyof T['$inferInsert']]
+										data[getIdField() as keyof T['$inferInsert']],
 									),
 								})
 								.returning()
@@ -512,7 +518,7 @@ export const createSqliteService = createService<SQLiteDb>(
 									data[getIdField() as keyof T['$inferInsert']],
 								),
 						)
-						
+
 						if (existing) {
 							yield* executeHooks(hooks, existing, 'after')
 							return existing

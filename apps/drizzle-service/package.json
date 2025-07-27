@@ -2,7 +2,7 @@
 	"name": "drizzle-service",
 	"module": "lib/index.js",
 	"type": "module",
-	"version": "0.0.10",
+	"version": "0.0.11",
 	"description": "A service for managing Drizzle ORM entities with advanced CRUD operations, pagination, soft deletes, relations, and bulk operations full type-safe",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",

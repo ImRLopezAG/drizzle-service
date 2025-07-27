@@ -6,8 +6,8 @@ import {
 	gt,
 	like,
 	ne,
-	sql,
 	type SQLWrapper,
+	sql,
 } from 'drizzle-orm'
 import { Effect } from 'effect'
 import { tryEffect } from '@/helpers'
@@ -48,8 +48,9 @@ export function createFilters<T extends BaseEntity>({
 	maxLimit = 100,
 	handleILike,
 }: Filters<T>) {
-	const lower = (col: Column<T['$inferSelect'][keyof T['$inferSelect']]>): SQLWrapper =>
-		sql`lower(${col})`
+	const lower = (
+		col: Column<T['$inferSelect'][keyof T['$inferSelect']]>,
+	): SQLWrapper => sql`lower(${col})`
 	function withPagination<Q extends QBuilders, TResult>(
 		q: Q,
 		options?: QueryOpts<T, TResult>,
@@ -69,12 +70,12 @@ export function createFilters<T extends BaseEntity>({
 		const orderExpressions = Object.entries(orderBy)
 			.filter(([_, direction]) => direction)
 			.map(([field, direction]) => {
-				const column = table[field as keyof T] as Column<T['$inferSelect'][keyof T['$inferSelect']]>
+				const column = table[field as keyof T] as Column<
+					T['$inferSelect'][keyof T['$inferSelect']]
+				>
 				if (column.columnType === 'string') {
-					return direction === 'asc'
-						? asc(lower(column))
-						: desc(lower(column))
-				} 
+					return direction === 'asc' ? asc(lower(column)) : desc(lower(column))
+				}
 				return direction === 'asc' ? asc(column) : desc(column)
 			})
 

@@ -59,7 +59,7 @@ const testIds = {
 const createTodo = async (
 	index = 0,
 	priority: 'low' | 'medium' | 'high' = 'medium',
-	status: 'todo' | 'backlog' | 'in-progress' | 'done' = 'todo'
+	status: 'todo' | 'backlog' | 'in-progress' | 'done' = 'todo',
 ) => {
 	const [error, todo] = await todosService.create({
 		title: `${uniquePrefix}-Todo-${index}`,
@@ -83,11 +83,11 @@ const createTodo = async (
 }
 
 export const createTodoWithMatching = async (
-	prefix: string,	
+	prefix: string,
 	index = 0,
 	priority: 'low' | 'medium' | 'high' = 'medium',
 	status: 'todo' | 'backlog' | 'in-progress' | 'done' = 'todo',
-	matching: 'startWith' | 'endWith' | 'contains' | 'exact' = 'exact'
+	matching: 'startWith' | 'endWith' | 'contains' | 'exact' = 'exact',
 ) => {
 	const title = {
 		startWith: `${prefix}-Todo-${index}-${uniquePrefix}`,
