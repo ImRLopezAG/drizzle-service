@@ -95,6 +95,15 @@ export type QueryOpts<
 		: (data: RelationType<T, TRels>[]) => TResult
 }
 
+export interface FindByQueryOpts<
+	T extends BaseEntity,
+	TResult = T['$inferSelect'][],
+	TRels extends WithRelations[] = [],
+> extends QueryOpts<T, TResult, TRels> {
+	match?: 'startWith' | 'contains' | 'exact' | 'endsWith'
+	caseSensitive?: boolean
+}
+
 export interface FindOneOpts<
 	T extends BaseEntity,
 	TResult = T['$inferSelect'],
@@ -146,6 +155,14 @@ export interface MutationOperations<
 		data: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>,
 		hooks?: ServiceHooks<T>,
 	) => Handler<T['$inferSelect']>
+	findOrCreate: (
+		data: T['$inferInsert'],
+		hooks?: ServiceHooks<T>,
+	) => Handler<T['$inferSelect']>
+	upsert: (
+		data: T['$inferInsert'],
+		hooks?: ServiceHooks<T>,
+	) => Handler<T['$inferSelect']>
 	delete: (
 		id: IdType<T, TOpts>,
 		hooks?: ServiceHooks<T>,
@@ -181,6 +198,14 @@ export interface QueryOperations<
 		id: IdType<T, TOpts>,
 		opts?: FindOneOpts<T, TResult, TRels>,
 	) => Promise<TResult | null>
+	findFirst: <
+		TRels extends WithRelations[] = [],
+		TResult = TRels['length'] extends 0
+			? T['$inferSelect']
+			: RelationType<T, TRels>,
+	>(
+		opts?: FindOneOpts<T, TResult, TRels>,
+	) => Promise<TResult | null>
 	/**
 	 * @deprecated This method is similar to `findBy` and may be changed or removed in the future.
 	 */
@@ -202,7 +227,7 @@ export interface QueryOperations<
 			: RelationType<T, TRels>[],
 	>(
 		criteria: Partial<T['$inferSelect']>,
-		opts?: QueryOpts<T, TResult, TRels>,
+		opts?: FindByQueryOpts<T, TResult, TRels>,
 	) => Promise<TResult>
 	findByMatching: <
 		TRels extends WithRelations[] = [],
@@ -211,7 +236,7 @@ export interface QueryOperations<
 			: RelationType<T, TRels>[],
 	>(
 		criteria: Partial<T['$inferSelect']>,
-		opts?: QueryOpts<T, TResult, TRels>,
+		opts?: FindByQueryOpts<T, TResult, TRels>,
 	) => Promise<TResult>
 
 	count: (
@@ -230,7 +255,7 @@ export interface QueryOperations<
 			TResult extends T['$inferSelect'][] ? T['$inferSelect'] : TResult
 		>
 	>
-	filter: <
+	search: <
 		TRels extends WithRelations[] = [],
 		TResult = TRels['length'] extends 0
 			? T['$inferSelect'][]
@@ -349,7 +374,6 @@ export type SoftDeleteOption<T extends BaseEntity> = {
 	[K in keyof T['$inferSelect']]: SoftDeleteConfig<T, K>
 }[keyof T['$inferSelect']]
 
-// Filter configuration for Business Central style filtering
 export type FilterExpression<T> = [string, ...T[]]
 
 export type FilterCriteria<T extends BaseEntity> = {

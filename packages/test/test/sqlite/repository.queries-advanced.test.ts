@@ -1,6 +1,13 @@
 import { and, eq, gt, like, lt, or, sql } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { createTodo, testIds, todosService, uniquePrefix } from './repository'
+import {
+	createTodo,
+	createTodoWithMatching,
+	testIds,
+	todosService,
+	uniquePrefix,
+	userService,
+} from './repository'
 import { tenants, todos, users } from './schema'
 import { setupBeforeAll } from './test-setup'
 
@@ -8,6 +15,10 @@ setupBeforeAll()
 
 describe('SQLITE Service: Query Operations (With Options)', () => {
 	// Create test data needed for advanced query tests
+	const START_WITH_PREFIX = 'starting'
+	const END_WITH_PREFIX = 'ending'
+	const CONTAINS_PREFIX = 'contains'
+
 	beforeAll(async () => {
 		// Create a variety of todos for testing advanced queries
 		for (let i = 0; i < 20; i++) {
@@ -24,6 +35,34 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 				1000 + i, // Use higher numbers to avoid conflicts
 				priority as 'low' | 'medium' | 'high',
 				status as 'todo' | 'backlog' | 'in-progress' | 'done',
+			)
+		}
+
+		for (let i = 0; i < 5; i++) {
+			await createTodoWithMatching(
+				START_WITH_PREFIX,
+				i,
+				'high',
+				'todo',
+				'startWith',
+			)
+		}
+		for (let i = 0; i < 5; i++) {
+			await createTodoWithMatching(
+				END_WITH_PREFIX,
+				i,
+				'medium',
+				'in-progress',
+				'endWith',
+			)
+		}
+		for (let i = 0; i < 5; i++) {
+			await createTodoWithMatching(
+				CONTAINS_PREFIX,
+				i,
+				'low',
+				'backlog',
+				'contains',
 			)
 		}
 	})
@@ -64,14 +103,14 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 	})
 
 	it('should order results by a single field descending', async () => {
-		const todos = await todosService.find({
-			orderBy: { title: 'desc' },
+		const users = await userService.find({
+			orderBy: { name: 'desc' },
 		})
 
-		// Check if titles are sorted in descending order
-		const titles = todos.map((todo) => todo.title)
-		const sortedTitles = [...titles].sort((a, b) => b.localeCompare(a))
-		expect(titles).toEqual(sortedTitles)
+		const names = users.map((user) => user.name)
+
+		const sorted = names.toSorted((a, b) => b.localeCompare(a, undefined, { sensitivity: 'base', numeric: true, localeMatcher: 'best fit' }))
+		expect(names).toEqual(sorted)
 	})
 
 	it('should filter results by multiple criteria', async () => {
@@ -454,7 +493,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 
 	it('should filter records with advanced filter expressions', async () => {
 		// Test range filtering - use a simple numeric range for testing
-		const rangeFilteredTodos = await todosService.filter(
+		const rangeFilteredTodos = await todosService.search(
 			{
 				// Test with a wildcard pattern instead of range to avoid ID issues
 				title: [`*${uniquePrefix}*`],
@@ -473,7 +512,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 
 	it('should filter records with wildcard patterns and options', async () => {
 		// Test wildcard filtering with ordering
-		const wildcardTodos = await todosService.filter(
+		const wildcardTodos = await todosService.search(
 			{
 				title: [`*${uniquePrefix}*`],
 			},
@@ -507,7 +546,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 
 	it('should filter records with OR conditions using pipe operator', async () => {
 		// Test multiple values using pipe operator (OR logic)
-		const orFilteredTodos = await todosService.filter(
+		const orFilteredTodos = await todosService.search(
 			{
 				priority: ['%1|%2|%3', 'high', 'low', 'medium'],
 			},
@@ -528,7 +567,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 
 	it('should filter records with comparison operators and pagination', async () => {
 		// Test greater than filtering with pagination
-		const comparisonTodos = await todosService.filter(
+		const comparisonTodos = await todosService.search(
 			{
 				// Filter by creation date (greater than a certain date)
 				createdAt: ['>%1', new Date(Date.now() - 24 * 60 * 60 * 1000)],
@@ -553,7 +592,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 
 	it('should filter records with case-insensitive matching', async () => {
 		// Test case-insensitive filtering
-		const caseInsensitiveTodos = await todosService.filter(
+		const caseInsensitiveTodos = await todosService.search(
 			{
 				title: [`@*${uniquePrefix.toLowerCase()}*`],
 			},
@@ -572,7 +611,7 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 
 	it('should filter records with combined filter expressions and relations', async () => {
 		// Test complex filtering with relations
-		const complexFilteredTodos = await todosService.filter(
+		const complexFilteredTodos = await todosService.search(
 			{
 				status: ['%1|%2', 'todo', 'in-progress'],
 				priority: ['<>%1', 'low'],
@@ -679,7 +718,6 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 			},
 		)
 
-		console.log('todoWithUserTenant', todoWithUserTenant)
 		expect(todoWithUserTenant).toBeDefined()
 		expect(todoWithUserTenant?.user).toBeDefined()
 		expect(todoWithUserTenant?.tenant).toBeDefined()
@@ -701,5 +739,52 @@ describe('SQLITE Service: Query Operations (With Options)', () => {
 			},
 		})
 		expect(todo).toBeNull()
+	})
+
+	it('should handle find by startWith', async () => {
+		const todosWithPrefix = await todosService.findBy(
+			{ title: START_WITH_PREFIX },
+			{
+				match: 'startWith',
+			},
+		)
+
+		expect(todosWithPrefix).toBeInstanceOf(Array)
+		expect(todosWithPrefix.length).toBeGreaterThan(0)
+
+		expect(
+			todosWithPrefix.every((todo) => todo.title.startsWith(START_WITH_PREFIX)),
+		).toBe(true)
+	})
+
+	it('should handle find by endWith', async () => {
+		const todosWithSuffix = await todosService.findBy(
+			{ title: END_WITH_PREFIX },
+			{
+				match: 'endsWith',
+			},
+		)
+
+		expect(todosWithSuffix).toBeInstanceOf(Array)
+		expect(todosWithSuffix.length).toBeGreaterThan(0)
+
+		expect(
+			todosWithSuffix.every((todo) => todo.title.endsWith(END_WITH_PREFIX)),
+		).toBe(true)
+	})
+
+	it('should handle find by contains', async () => {
+		const todosContaining = await todosService.findBy(
+			{ title: CONTAINS_PREFIX },
+			{
+				match: 'contains',
+			},
+		)
+
+		expect(todosContaining).toBeInstanceOf(Array)
+		expect(todosContaining.length).toBeGreaterThan(0)
+		expect(
+			todosContaining.every((todo) => todo.title.includes(CONTAINS_PREFIX)),
+		).toBe(true)
 	})
 })

@@ -275,4 +275,193 @@ describe('SQLITE Service: Mutation Operations', () => {
 		expect(error).toBeDefined()
 		expect(user).toBeNull()
 	})
+
+	it('should handle custom error messages for validation errors', async () => {
+		const invalidData = {
+			email: 'invalid-email',
+			name: '',
+			tenant: 0,
+		}
+
+		const [error, user] = await userService.create(invalidData, {
+			async beforeAction(data) {
+				try {
+					userSchema.parse(data)
+				} catch (_e) {
+					throw new Error('Custom validation error message')
+				}
+			},
+		})
+		expect(error).toBeDefined()
+		if (!error) throw new Error('Expected error to be defined')
+		expect(error.message).toBe('Custom validation error message')
+		expect(user).toBeNull()
+	})
+
+	it('should create a record after not finding it', async () => {
+		const nonExistentId = `${performance.now()}-non-existent`
+		const [error, todo] = await todosService.findOrCreate({
+			id: nonExistentId,
+			title: `${uniquePrefix}-FindOrCreate`,
+			userId: testIds.userId,
+			tenant: testIds.tenantId,
+		})
+		expect(error).toBeNull()
+		expect(todo).toBeDefined()
+		expect(todo?.id).toBe(nonExistentId)
+		expect(todo?.title).toBe(`${uniquePrefix}-FindOrCreate`)
+		expect(todo?.userId).toBe(testIds.userId)
+		expect(todo?.status).toBe('todo') // Default value
+		expect(todo?.priority).toBe('medium') // Default value
+		if (todo) testIds.todoIds.push(todo.id)
+	})
+
+	it('should not create a record if it already exists', async () => {
+		const existingTodo = await createTodo(990)
+		const [error, todo] = await todosService.findOrCreate({
+			id: existingTodo.id,
+			title: `${uniquePrefix}-FindOrCreate-Existing`,
+			userId: testIds.userId,
+			tenant: testIds.tenantId,
+		})
+		expect(error).toBeNull()
+		expect(todo).toBeDefined()
+		expect(todo?.id).toBe(existingTodo.id)
+		expect(todo?.title).toBe(existingTodo.title) // Should not change the title
+	})
+	it('should handle findOrCreate with lifecycle hooks', async () => {
+		let hookCalled = false
+
+		const [error, todo] = await todosService.findOrCreate(
+			{
+				id: `${uniquePrefix}-FindOrCreate-Hooks`,
+				title: `${uniquePrefix}-Hooks-${performance.now()}`,
+				userId: testIds.userId,
+				tenant: testIds.tenantId,
+			},
+			{
+				async afterAction(data) {
+					hookCalled = true
+					expect(data.id).toBeDefined()
+					return Promise.resolve()
+				},
+			},
+		)
+
+		expect(error).toBeNull()
+		expect(todo).toBeDefined()
+		expect(hookCalled).toBe(true)
+
+		if (todo) testIds.todoIds.push(todo.id)
+	})
+
+	it('should handle findOrCreate with existing record', async () => {
+		const existingTodo = await createTodo(989)
+		let hookCalled = false
+
+		const [error, todo] = await todosService.findOrCreate(
+			{
+				id: existingTodo.id,
+				title: `${uniquePrefix}-FindOrCreate-Existing-Hooks`,
+				userId: testIds.userId,
+				tenant: testIds.tenantId,
+			},
+			{
+				async afterAction(data) {
+					hookCalled = true
+					expect(data.id).toBe(existingTodo.id)
+					expect(data.title).toBe(existingTodo.title) // Should not change the title
+					return Promise.resolve()
+				},
+			},
+		)
+
+		expect(error).toBeNull()
+		expect(todo).toBeDefined()
+		expect(hookCalled).toBe(true)
+	})
+
+	it('should upsert a record', async () => {
+		const nonExistentId = `${performance.now()}-upsert-non-existent`
+		const nonExistentTitle = `${uniquePrefix}-Upsert-${performance.now()}`
+		const [error, todo] = await todosService.upsert({
+			id: nonExistentId,
+			title: nonExistentTitle,
+			userId: testIds.userId,
+			tenant: testIds.tenantId,
+		})
+		expect(error).toBeNull()
+		expect(todo).toBeDefined()
+		expect(todo?.id).toBe(nonExistentId)
+		expect(todo?.title).toBe(nonExistentTitle)
+		expect(todo?.userId).toBe(testIds.userId)
+		expect(todo?.status).toBe('todo') // Default value
+		expect(todo?.priority).toBe('medium') // Default value
+		if (todo) testIds.todoIds.push(todo.id)
+
+		const updatedTitle = `${nonExistentTitle}-Updated`
+		const [updateError, updatedTodo] = await todosService.upsert({
+			id: nonExistentId,
+			title: updatedTitle,
+			userId: testIds.userId,
+			tenant: testIds.tenantId,
+		})
+		expect(updateError).toBeNull()
+		expect(updatedTodo).toBeDefined()
+		expect(updatedTodo?.id).toBe(nonExistentId)
+		expect(updatedTodo?.title).toBe(updatedTitle)
+		expect(updatedTodo?.userId).toBe(testIds.userId)
+		expect(updatedTodo?.status).toBe('todo') // Should remain the same
+		expect(updatedTodo?.priority).toBe('medium') // Should remain the same
+	})
+
+	it('should handle upsert with lifecycle hooks', async () => {
+		let hookCalled = false
+
+		const [error, todo] = await todosService.upsert(
+			{
+				id: `${uniquePrefix}-Upsert-Hooks`,
+				title: `${uniquePrefix}-Hooks-${performance.now()}`,
+				userId: testIds.userId,
+				tenant: testIds.tenantId,
+			},
+			{
+				async afterAction(data) {
+					hookCalled = true
+					expect(data.id).toBeDefined()
+					return Promise.resolve()
+				},
+			},
+		)
+
+		expect(error).toBeNull()
+		expect(todo).toBeDefined()
+		expect(hookCalled).toBe(true)
+
+		if (todo) testIds.todoIds.push(todo.id)
+		if (!todo) throw new Error('Expected todo to be defined')
+		const updatedTitle = `${uniquePrefix}-Upsert-Hooks-Updated-${performance.now()}`
+		const [updateError, updatedTodo] = await todosService.upsert(
+			{
+				id: todo.id,
+				title: updatedTitle,
+				userId: testIds.userId,
+				tenant: testIds.tenantId,
+			},
+			{
+				async afterAction(data) {
+					hookCalled = true
+					expect(data.id).toBe(todo.id)
+					expect(data.title).toBe(updatedTitle)
+					return Promise.resolve()
+				},
+			},
+		)
+
+		expect(updateError).toBeNull()
+		expect(updatedTodo).toBeDefined()
+		expect(hookCalled).toBe(true)
+
+		if (updatedTodo) testIds.todoIds.push(updatedTodo.id)
+	})
 })

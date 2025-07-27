@@ -59,7 +59,7 @@ const testIds = {
 const createTodo = async (
 	index = 0,
 	priority: 'low' | 'medium' | 'high' = 'medium',
-	status: 'todo' | 'backlog' | 'in-progress' | 'done' = 'todo',
+	status: 'todo' | 'backlog' | 'in-progress' | 'done' = 'todo'
 ) => {
 	const [error, todo] = await todosService.create({
 		title: `${uniquePrefix}-Todo-${index}`,
@@ -80,6 +80,38 @@ const createTodo = async (
 		return todo
 	}
 	throw new Error('Failed to create todo')
+}
+
+export const createTodoWithMatching = async (
+	prefix: string,	
+	index = 0,
+	priority: 'low' | 'medium' | 'high' = 'medium',
+	status: 'todo' | 'backlog' | 'in-progress' | 'done' = 'todo',
+	matching: 'startWith' | 'endWith' | 'contains' | 'exact' = 'exact'
+) => {
+	const title = {
+		startWith: `${prefix}-Todo-${index}-${uniquePrefix}`,
+		endWith: `${uniquePrefix}-Todo-${index}-${prefix}`,
+		contains: `${uniquePrefix}-${prefix}-Todo-${index}`,
+		exact: `Todo-${prefix}-${index}-${uniquePrefix}`,
+	}
+	const [error, todo] = await todosService.create({
+		title: title[matching],
+		description: `Description for test todo ${index}`,
+		userId: testIds.userId,
+		priority,
+		status,
+		tenant: testIds.tenantId,
+		label:
+			index % 3 === 0 ? 'bug' : index % 3 === 1 ? 'feature' : 'documentation',
+	})
+	expect(error).toBeNull()
+	expect(todo).toBeDefined()
+	if (error) {
+		throw new Error(`Failed to create todo with error: ${error.message}`)
+	}
+	testIds.todoIds.push(todo.id)
+	return todo
 }
 
 const userSchema = z.object({

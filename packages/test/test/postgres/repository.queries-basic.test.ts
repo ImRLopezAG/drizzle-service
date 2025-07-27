@@ -220,9 +220,9 @@ describe('PG Service: Query Operations (Without Options)', () => {
 		}
 	})
 
-	it('should filter records using filter criteria', async () => {
-		// Test basic filtering with string pattern matching (contains)
-		const todosWithPrefix = await todosService.filter({
+	it('should search records using search criteria', async () => {
+		// Test basic searching with string pattern matching (contains)
+		const todosWithPrefix = await todosService.search({
 			title: [`*${uniquePrefix}*`],
 		})
 
@@ -235,9 +235,9 @@ describe('PG Service: Query Operations (Without Options)', () => {
 		}
 	})
 
-	it('should filter records with multiple criteria', async () => {
-		// Test filtering with multiple fields using exact match
-		const filteredTodos = await todosService.filter({
+	it('should search records with multiple criteria', async () => {
+		// Test searching with multiple fields using exact match
+		const filteredTodos = await todosService.search({
 			priority: ['%1', 'high'],
 			status: ['%1', 'done'],
 		})
@@ -251,13 +251,41 @@ describe('PG Service: Query Operations (Without Options)', () => {
 		}
 	})
 
-	it('should filter records with no results', async () => {
-		// Test filtering that returns no results
-		const filteredTodos = await todosService.filter({
-			title: ['*non-existent-filter-pattern-xyz*'],
+	it('should search records with no results', async () => {
+		// Test searching that returns no results
+		const filteredTodos = await todosService.search({
+			title: ['*non-existent-search-pattern-xyz*'],
 		})
 
 		expect(filteredTodos).toBeInstanceOf(Array)
 		expect(filteredTodos).toHaveLength(0)
 	})
+
+	it('should find the first record', async () => {
+			const firstTodo = await todosService.findFirst()
+	
+			expect(firstTodo).not.toBeNull()
+			expect(firstTodo).toHaveProperty('id')
+			expect(firstTodo).toHaveProperty('title')
+			expect(firstTodo).toHaveProperty('userId')
+			expect(firstTodo).toHaveProperty('status')
+			expect(firstTodo).toHaveProperty('createdAt')
+			expect(firstTodo).toHaveProperty('updatedAt')
+	
+			// Verify that the first todo has the lowest ID
+			const allTodos = await todosService.find()
+			expect(allTodos).toBeInstanceOf(Array)
+			expect(allTodos.length).toBeGreaterThan(0)
+			const todo = allTodos[0]
+			if (!todo || !firstTodo) {
+				throw new Error('No todos found to verify first record')
+			}
+			expect(todo.id).toBe(firstTodo.id)
+			expect(todo.title).toBe(firstTodo.title)
+			expect(todo.userId).toBe(firstTodo.userId)
+			expect(todo.status).toBe(firstTodo.status)
+			expect(todo.createdAt.toISOString()).toBe(firstTodo.createdAt.toISOString())
+			expect(todo.updatedAt.toISOString()).toBe(firstTodo.updatedAt.toISOString())
+			expect(firstTodo.id).toBe(todo.id)
+		})
 })

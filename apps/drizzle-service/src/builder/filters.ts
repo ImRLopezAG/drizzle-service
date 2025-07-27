@@ -4,7 +4,9 @@ import {
 	desc,
 	eq,
 	gt,
+	like,
 	ne,
+	sql,
 	type SQLWrapper,
 } from 'drizzle-orm'
 import { Effect } from 'effect'
@@ -46,6 +48,8 @@ export function createFilters<T extends BaseEntity>({
 	maxLimit = 100,
 	handleILike,
 }: Filters<T>) {
+	const lower = (col: Column<T['$inferSelect'][keyof T['$inferSelect']]>): SQLWrapper =>
+		sql`lower(${col})`
 	function withPagination<Q extends QBuilders, TResult>(
 		q: Q,
 		options?: QueryOpts<T, TResult>,
@@ -65,7 +69,12 @@ export function createFilters<T extends BaseEntity>({
 		const orderExpressions = Object.entries(orderBy)
 			.filter(([_, direction]) => direction)
 			.map(([field, direction]) => {
-				const column = table[field as keyof T] as SQLWrapper
+				const column = table[field as keyof T] as Column<T['$inferSelect'][keyof T['$inferSelect']]>
+				if (column.columnType === 'string') {
+					return direction === 'asc'
+						? asc(lower(column))
+						: desc(lower(column))
+				} 
 				return direction === 'asc' ? asc(column) : desc(column)
 			})
 
@@ -270,6 +279,28 @@ export function createFilters<T extends BaseEntity>({
 			return data as unknown as TResult | null
 		})
 	}
+
+	function createConditionEnhanced<K extends keyof T['$inferSelect']>(
+		column: Column<T['$inferSelect'][K]>,
+		value: T['$inferSelect'][K],
+		matchType: 'startWith' | 'contains' | 'exact' | 'endsWith',
+		caseSensitive: boolean = false,
+	): SQLWrapper {
+		const likeOperator = caseSensitive ? like : handleILike
+
+		switch (matchType) {
+			case 'exact':
+				return eq(column, value)
+			case 'startWith':
+				return likeOperator(column, `${value}%`)
+			case 'contains':
+				return likeOperator(column, `%${value}%`)
+			case 'endsWith':
+				return likeOperator(column, `%${value}`)
+			default:
+				return eq(column, value)
+		}
+	}
 	return {
 		withPagination,
 		withOrderBy,
@@ -282,6 +313,7 @@ export function createFilters<T extends BaseEntity>({
 		parseFilterExpression,
 		handleQueries,
 		handleOneQuery,
+		createConditionEnhanced,
 	}
 }
 
@@ -336,4 +368,10 @@ type FiltersReturn<T extends BaseEntity, QB extends QBuilders> = {
 			afterParse?: (data: TResult) => TResult | null
 		},
 	) => Effect.Effect<TResult>
+	createConditionEnhanced: <K extends keyof T['$inferSelect']>(
+		column: Column<T['$inferSelect'][K]>,
+		value: T['$inferSelect'][K],
+		matchType: 'startWith' | 'contains' | 'exact' | 'endsWith',
+		caseSensitive?: boolean,
+	) => SQLWrapper
 }

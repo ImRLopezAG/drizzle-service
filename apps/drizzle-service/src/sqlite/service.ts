@@ -2,6 +2,7 @@ import { createFilters } from '@builder/filters'
 import type {
 	BulkOperationResult,
 	FilterCriteria,
+	FindByQueryOpts,
 	FindOneOpts,
 	IdType,
 	MutationOperations,
@@ -18,6 +19,7 @@ import type {
 } from '@builder/types'
 import {
 	and,
+	type Column,
 	count,
 	eq,
 	getTableName,
@@ -25,6 +27,7 @@ import {
 	or,
 	type SQLWrapper,
 } from 'drizzle-orm'
+import type { IndexColumn } from 'drizzle-orm/sqlite-core'
 import { Effect } from 'effect'
 import { createService, sqliteIlike } from '@/builder'
 import {
@@ -57,14 +60,19 @@ export const createSqliteService = createService<SQLiteDb>(
 			return (id as keyof typeof table) || ('id' as keyof typeof table)
 		}
 
-		const { withOpts, parseFilterExpression, handleQueries, handleOneQuery } =
-			createFilters<T>({
-				table,
-				soft,
-				defaultLimit,
-				maxLimit,
-				handleILike: sqliteIlike,
-			})
+		const {
+			withOpts,
+			parseFilterExpression,
+			handleQueries,
+			handleOneQuery,
+			createConditionEnhanced,
+		} = createFilters<T>({
+			table,
+			soft,
+			defaultLimit,
+			maxLimit,
+			handleILike: sqliteIlike,
+		})
 
 		// Helper function to split array into batches
 		function createBatches<T>(array: T[], batchSize: number): T[][] {
@@ -97,7 +105,28 @@ export const createSqliteService = createService<SQLiteDb>(
 			) => {
 				return handleError(handleQueries(createBaseQuery(), opts))
 			},
-
+			findFirst: <
+				TRels extends WithRelations[] = [],
+				TResult = TRels['length'] extends 0
+					? T['$inferSelect']
+					: RelationType<T, TRels>,
+			>(
+				opts = {},
+			): Promise<TResult | null> => {
+				return handleError(
+					handleOneQuery(createBaseQuery(), opts, {
+						beforeParse(q) {
+							return q.limit(1)
+						},
+						afterParse(data) {
+							const isArray = Array.isArray(data)
+							if (isArray && data.length === 0) return null
+							if (isArray) return (data as TResult[])[0] as TResult
+							return data as TResult
+						},
+					}),
+				)
+			},
 			findOne: <
 				TRels extends WithRelations[] = [],
 				TResult = TRels['length'] extends 0
@@ -215,11 +244,23 @@ export const createSqliteService = createService<SQLiteDb>(
 					: RelationType<T, TRels>[],
 			>(
 				criteria: Partial<T['$inferSelect']>,
-				opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
+				opts: FindByQueryOpts<T, TResult, TRels> = {} as FindByQueryOpts<
+					T,
+					TResult,
+					TRels
+				>,
 			) => {
-				const conditions = Object.entries(criteria).map(([key, value]) =>
-					eq(table[key as keyof T['$inferSelect']] as SQLWrapper, value),
-				)
+				const conditions = Object.entries(criteria).map(([key, value]) => {
+					const column = table[key as keyof T] as Column<
+						T['$inferSelect'][keyof T['$inferSelect']]
+					>
+					return createConditionEnhanced(
+						column,
+						value,
+						opts.match || 'exact',
+						opts.caseSensitive,
+					)
+				})
 				return handleError(
 					handleQueries<TResult, TRels>(createBaseQuery(), opts, {
 						beforeParse(q) {
@@ -236,11 +277,23 @@ export const createSqliteService = createService<SQLiteDb>(
 					: RelationType<T, TRels>[],
 			>(
 				criteria: Partial<T['$inferSelect']>,
-				opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
+				opts: FindByQueryOpts<T, TResult, TRels> = {} as FindByQueryOpts<
+					T,
+					TResult,
+					TRels
+				>,
 			) => {
-				const conditions = Object.entries(criteria).map(([key, value]) =>
-					eq(table[key as keyof T['$inferSelect']] as SQLWrapper, value),
-				)
+				const conditions = Object.entries(criteria).map(([key, value]) => {
+					const column = table[key as keyof T] as Column<
+						T['$inferSelect'][keyof T['$inferSelect']]
+					>
+					return createConditionEnhanced(
+						column,
+						value,
+						opts.match || 'contains',
+						opts.caseSensitive,
+					)
+				})
 
 				return handleError(
 					handleQueries<TResult, TRels>(createBaseQuery(), opts, {
@@ -271,7 +324,7 @@ export const createSqliteService = createService<SQLiteDb>(
 				)
 			},
 
-			filter: <
+			search: <
 				TRels extends WithRelations[] = [],
 				TResult = TRels['length'] extends 0
 					? T['$inferSelect'][]
@@ -399,7 +452,99 @@ export const createSqliteService = createService<SQLiteDb>(
 					),
 				)
 			},
+			upsert(data, hooks) {
+				return tryHandleError(
+					Effect.gen(function* () {
+						yield* executeHooks(hooks, data, 'before')
 
+						const result = yield* tryEffect(async () => {
+							const [result] = await db
+								.insert(table)
+								.values(data)
+								.onConflictDoUpdate({
+									target: table[getIdField()] as IndexColumn,
+									set: data,
+									setWhere: eq(
+										table[getIdField()] as SQLWrapper,
+										data[getIdField() as keyof T['$inferInsert']]
+									),
+								})
+								.returning()
+								.execute()
+
+							return result
+						})
+
+						if (!result) {
+							return yield* createDatabaseError(
+								`Failed to upsert ${entityName}`,
+								{
+									code: 'SQL_FAILURE',
+									query: db
+										.insert(table)
+										.values(data)
+										.onConflictDoUpdate({
+											target: table[getIdField()] as IndexColumn,
+											set: data,
+											setWhere: eq(
+												table[getIdField()] as SQLWrapper,
+												data[getIdField() as keyof T['$inferInsert']],
+											),
+										})
+										.toSQL(),
+								},
+							)
+						}
+						yield* executeHooks(hooks, result, 'after')
+						return result
+					}).pipe(
+						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+					),
+				)
+			},
+			findOrCreate(data, hooks) {
+				return tryHandleError(
+					Effect.gen(function* () {
+						yield* executeHooks(hooks, data, 'before')
+						const existing = yield* tryEffect(
+							async () =>
+								await _queryOperations.findOne(
+									data[getIdField() as keyof T['$inferInsert']],
+								),
+						)
+						
+						if (existing) {
+							yield* executeHooks(hooks, existing, 'after')
+							return existing
+						}
+
+						const result = yield* tryEffect(async () => {
+							const [result] = await db
+								.insert(table)
+								.values(data)
+								.returning()
+								.execute()
+
+							return result
+						})
+
+						if (!result) {
+							return yield* createDatabaseError(
+								`Failed to find or create ${entityName}`,
+								{
+									code: 'SQL_FAILURE',
+									query: db.insert(table).values(data).toSQL(),
+								},
+							)
+						}
+						yield* executeHooks(hooks, result, 'after')
+
+						return result
+					}).pipe(
+						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+					),
+				)
+			},
 			delete: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
 				return handleError(
 					Effect.gen(function* () {

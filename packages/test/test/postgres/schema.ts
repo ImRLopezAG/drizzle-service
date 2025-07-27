@@ -91,7 +91,7 @@ const db = drizzle({
 		todos,
 		users,
 	},
-	client,
+	client
 })
 
 const service = drizzleService(db)
