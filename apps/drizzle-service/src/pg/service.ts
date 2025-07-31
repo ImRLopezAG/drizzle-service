@@ -16,6 +16,7 @@ import type {
 	ServiceHooks,
 	ServiceMethods,
 	WithRelations,
+	ExtendedServiceHooks
 } from '@builder/types'
 import {
 	and,
@@ -405,7 +406,7 @@ export const createPostgresService = createService<PostgresDb>(
 			update: (
 				id: IdType<T, O>,
 				data: Partial<Omit<T['$inferInsert'], 'id' | 'createdAt'>>,
-				hooks?: ServiceHooks<T>,
+				hooks?: ExtendedServiceHooks<T>,
 			) => {
 				return tryHandleError(
 					Effect.gen(function* () {
@@ -431,7 +432,7 @@ export const createPostgresService = createService<PostgresDb>(
 							const [result] = await db
 								.update(table)
 								.set(updateData)
-								.where(eq(table[idField] as SQLWrapper, id))
+								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 								.returning()
 								.execute()
 
@@ -446,7 +447,7 @@ export const createPostgresService = createService<PostgresDb>(
 									query: db
 										.update(table)
 										.set(updateData)
-										.where(eq(table[idField] as SQLWrapper, id))
+										.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 										.toSQL(),
 								},
 							)
@@ -492,7 +493,7 @@ export const createPostgresService = createService<PostgresDb>(
 										.onConflictDoUpdate({
 											target: table[getIdField()] as IndexColumn,
 											set: data,
-											setWhere: eq(
+											setWhere: hooks?.custom || eq(
 												table[getIdField()] as SQLWrapper,
 												data[getIdField() as keyof T['$inferInsert']],
 											),
@@ -549,7 +550,7 @@ export const createPostgresService = createService<PostgresDb>(
 					),
 				)
 			},
-			delete: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
+			delete: (id: IdType<T, O>, hooks?: ExtendedServiceHooks<T>) => {
 				return handleError(
 					Effect.gen(function* () {
 						const idField = getIdField()
@@ -575,7 +576,7 @@ export const createPostgresService = createService<PostgresDb>(
 									string,
 									unknown
 								>)
-								.where(eq(table[idField] as SQLWrapper, id))
+								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 								.returning()
 								.execute()
 
@@ -600,7 +601,7 @@ export const createPostgresService = createService<PostgresDb>(
 				)
 			},
 
-			hardDelete: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
+			hardDelete: (id: IdType<T, O>, hooks?: ExtendedServiceHooks<T>) => {
 				return handleError(
 					Effect.gen(function* () {
 						const idField = getIdField()
@@ -615,7 +616,7 @@ export const createPostgresService = createService<PostgresDb>(
 						const result = yield* tryEffect(async () => {
 							const [deleted] = await db
 								.delete(table)
-								.where(eq(table[idField] as SQLWrapper, id))
+								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 								.returning()
 								.execute()
 
@@ -637,7 +638,7 @@ export const createPostgresService = createService<PostgresDb>(
 				)
 			},
 
-			restore: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
+			restore: (id: IdType<T, O>, hooks?: ExtendedServiceHooks<T>) => {
 				return handleError(
 					Effect.gen(function* () {
 						if (!soft)
@@ -688,7 +689,7 @@ export const createPostgresService = createService<PostgresDb>(
 									[field]: restoreValue,
 									updatedAt: new Date(),
 								} as Record<string, unknown>)
-								.where(eq(table[idField] as SQLWrapper, id))
+								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 						})
 
 						const restoredData = {

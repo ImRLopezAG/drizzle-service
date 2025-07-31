@@ -16,6 +16,7 @@ import type {
 	ServiceMethods,
 	SQLiteDb,
 	WithRelations,
+	ExtendedServiceHooks
 } from '@builder/types'
 import {
 	and,
@@ -365,7 +366,7 @@ export const createSqliteService = createService<SQLiteDb>(
 		// ===============================
 
 		const _mutationOperations: MutationOperations<T, O> = {
-			create: (data: T['$inferInsert'], hooks?: ServiceHooks<T>) => {
+			create: (data: T['$inferInsert'], hooks) => {
 				return tryHandleError(
 					Effect.gen(function* () {
 						const insertData = {
@@ -405,7 +406,7 @@ export const createSqliteService = createService<SQLiteDb>(
 			update: (
 				id: IdType<T, O>,
 				data: Partial<Omit<T['$inferInsert'], 'id' | 'createdAt'>>,
-				hooks?: ServiceHooks<T>,
+				hooks?: 	ExtendedServiceHooks<T>,
 			) => {
 				return tryHandleError(
 					Effect.gen(function* () {
@@ -431,7 +432,7 @@ export const createSqliteService = createService<SQLiteDb>(
 							const [result] = await db
 								.update(table)
 								.set(updateData)
-								.where(eq(table[idField] as SQLWrapper, id))
+								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 								.returning()
 								.execute()
 
@@ -446,7 +447,7 @@ export const createSqliteService = createService<SQLiteDb>(
 									query: db
 										.update(table)
 										.set(updateData)
-										.where(eq(table[idField] as SQLWrapper, id))
+										.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 										.toSQL(),
 								},
 							)
@@ -470,7 +471,7 @@ export const createSqliteService = createService<SQLiteDb>(
 								.onConflictDoUpdate({
 									target: table[getIdField()] as IndexColumn,
 									set: data,
-									setWhere: eq(
+									setWhere: hooks?.custom || eq(
 										table[getIdField()] as SQLWrapper,
 										data[getIdField() as keyof T['$inferInsert']],
 									),
@@ -492,7 +493,7 @@ export const createSqliteService = createService<SQLiteDb>(
 										.onConflictDoUpdate({
 											target: table[getIdField()] as IndexColumn,
 											set: data,
-											setWhere: eq(
+											setWhere: hooks?.custom || eq(
 												table[getIdField()] as SQLWrapper,
 												data[getIdField() as keyof T['$inferInsert']],
 											),
@@ -551,7 +552,7 @@ export const createSqliteService = createService<SQLiteDb>(
 					),
 				)
 			},
-			delete: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
+			delete: (id: IdType<T, O>, hooks) => {
 				return handleError(
 					Effect.gen(function* () {
 						const idField = getIdField()
@@ -577,7 +578,7 @@ export const createSqliteService = createService<SQLiteDb>(
 									string,
 									unknown
 								>)
-								.where(eq(table[idField] as SQLWrapper, id))
+								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 								.returning()
 								.execute()
 
@@ -602,7 +603,7 @@ export const createSqliteService = createService<SQLiteDb>(
 				)
 			},
 
-			hardDelete: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
+			hardDelete: (id: IdType<T, O>, hooks) => {
 				return handleError(
 					Effect.gen(function* () {
 						const idField = getIdField()
@@ -617,7 +618,7 @@ export const createSqliteService = createService<SQLiteDb>(
 						const result = yield* tryEffect(async () => {
 							const [deleted] = await db
 								.delete(table)
-								.where(eq(table[idField] as SQLWrapper, id))
+								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 								.returning()
 								.execute()
 
@@ -639,7 +640,7 @@ export const createSqliteService = createService<SQLiteDb>(
 				)
 			},
 
-			restore: (id: IdType<T, O>, hooks?: ServiceHooks<T>) => {
+			restore: (id: IdType<T, O>, hooks) => {
 				return handleError(
 					Effect.gen(function* () {
 						if (!soft)
@@ -690,7 +691,7 @@ export const createSqliteService = createService<SQLiteDb>(
 									[field]: restoreValue,
 									updatedAt: new Date(),
 								} as Record<string, unknown>)
-								.where(eq(table[idField] as SQLWrapper, id))
+								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 						})
 
 						const restoredData = {
@@ -716,7 +717,7 @@ export const createSqliteService = createService<SQLiteDb>(
 		// ===============================
 
 		const _bulkOperations: MutationsBulkOperations<T, O> = {
-			bulkCreate: (data: T['$inferInsert'][], hooks?: ServiceHooks<T>) => {
+			bulkCreate: (data: T['$inferInsert'][], hooks) => {
 				return handleError(
 					Effect.gen(function* () {
 						const result: BulkOperationResult<T['$inferSelect'][], T> = {
@@ -856,7 +857,7 @@ export const createSqliteService = createService<SQLiteDb>(
 				)
 			},
 
-			bulkDelete: (ids: IdType<T, O>[], hooks?: ServiceHooks<T>) => {
+			bulkDelete: (ids: IdType<T, O>[], hooks) => {
 				return handleError(
 					Effect.gen(function* () {
 						const result: BulkOperationResult<
@@ -993,7 +994,7 @@ export const createSqliteService = createService<SQLiteDb>(
 				)
 			},
 
-			bulkHardDelete: (ids: IdType<T, O>[], hooks?: ServiceHooks<T>) => {
+			bulkHardDelete: (ids: IdType<T, O>[], hooks) => {
 				return Effect.gen(function* () {
 					const result: BulkOperationResult<
 						{ readonly success: boolean; readonly message?: string },
@@ -1100,7 +1101,7 @@ export const createSqliteService = createService<SQLiteDb>(
 				)
 			},
 
-			bulkRestore: (ids: IdType<T, O>[], hooks?: ServiceHooks<T>) => {
+			bulkRestore: (ids: IdType<T, O>[], hooks) => {
 				return Effect.gen(function* () {
 					const result: BulkOperationResult<
 						{ readonly success: boolean; readonly message?: string },

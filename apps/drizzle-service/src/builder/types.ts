@@ -94,6 +94,15 @@ export type QueryOpts<
 		? (data: T['$inferSelect'][]) => TResult
 		: (data: RelationType<T, TRels>[]) => TResult
 }
+type CriteriaFilters = 'gt' | 'gte' | 'lt' | 'lte' | 'eq' | 'neq' | 'in' | 'nin'
+
+export type CriteriaFilter<T extends BaseEntity> = {
+	[K in keyof T['$inferSelect']]?: T['$inferSelect'][K]  | {
+		[P in CriteriaFilters]?: T['$inferSelect'][K] | T['$inferSelect'][K][]
+	} & {
+		custom?: SQL
+	}
+} 
 
 export interface FindByQueryOpts<
 	T extends BaseEntity,
@@ -142,6 +151,9 @@ export interface ServiceHooks<T extends BaseEntity> {
 	onError?: (error: ServiceError) => Promise<void>
 }
 
+export interface ExtendedServiceHooks<T extends BaseEntity> extends ServiceHooks<T> {
+	custom?: SQL
+}
 export interface MutationOperations<
 	T extends BaseEntity,
 	TOpts extends ServiceOptions<T> | undefined = undefined,
@@ -153,7 +165,7 @@ export interface MutationOperations<
 	update: (
 		id: IdType<T, TOpts>,
 		data: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>,
-		hooks?: ServiceHooks<T>,
+		hooks?: ExtendedServiceHooks<T>,
 	) => Handler<T['$inferSelect']>
 	findOrCreate: (
 		data: T['$inferInsert'],
@@ -161,19 +173,19 @@ export interface MutationOperations<
 	) => Handler<T['$inferSelect']>
 	upsert: (
 		data: T['$inferInsert'],
-		hooks?: ServiceHooks<T>,
+		hooks?: ExtendedServiceHooks<T>,
 	) => Handler<T['$inferSelect']>
 	delete: (
 		id: IdType<T, TOpts>,
-		hooks?: ServiceHooks<T>,
+		hooks?: ExtendedServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
 	hardDelete: (
 		id: IdType<T, TOpts>,
-		hooks?: ServiceHooks<T>,
+		hooks?: ExtendedServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
 	restore: (
 		id: IdType<T, TOpts>,
-		hooks?: ServiceHooks<T>,
+		hooks?: ExtendedServiceHooks<T>,
 	) => Promise<{ readonly success: boolean; readonly message?: string }>
 }
 
@@ -433,3 +445,5 @@ export type IdType<
 	: T['$inferSelect'] extends { id: infer IdType }
 		? IdType
 		: string
+
+

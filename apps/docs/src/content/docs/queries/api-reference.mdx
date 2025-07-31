@@ -117,6 +117,64 @@ All query operations support a comprehensive set of options for customizing the 
   }}
 />
 
+## Find By Query Options
+
+All query operations support a comprehensive set of options for customizing the query behavior:
+
+<TypeTable
+  type={{
+    page: {
+      description: 'Page number for pagination (1-based)',
+      type: 'number',
+      default: '1'
+    },
+    limit: {
+      description: 'Maximum number of records to return',
+      type: 'number',
+      default: '100'
+    },
+    orderBy: {
+      description: 'Sorting configuration for results',
+      type: 'Record<keyof T, "asc" | "desc">',
+    },
+    withDeleted: {
+      description: 'Include soft-deleted records in results',
+      type: 'boolean',
+      default: 'false'
+    },
+    cursor: {
+      description: 'Cursor position for cursor-based pagination',
+      type: 'Date | null',
+    },
+    relations: {
+      description: 'Related entities to include in the query',
+      type: 'WithRelations[]',
+    },
+    workspace: {
+      description: 'Workspace-based filtering for multi-tenant applications',
+      type: '{ field: keyof T, value: T[keyof T] }',
+    },
+    custom: {
+      description: 'Custom SQL conditions to apply',
+      type: 'SQL',
+    },
+    parse: {
+      description: 'Custom result transformation function',
+      type: '(data: T[]) => TResult',
+    },
+    match: {
+      description: 'Match any of the criteria using global string matching',
+      type: 'enum',
+      enum: ['startWith', 'endWith', 'contains', 'exact']
+    },
+    caseSensitive: {
+      description: 'Enable case-sensitive matching',
+      type: 'boolean',
+      default: 'false'
+    }
+  }}
+/>
+
 
 ## Filter Expressions
 
@@ -217,6 +275,35 @@ const workspaceTodos = await todosService.find({
     value: 'company-abc'
   }
 })
+```
+
+## findFirst()
+
+Finds the first entity of the table.
+
+### Parameters
+<TypeTable
+  type={{
+    opts: {
+      description: "Optional query options for filtering, sorting, and including relations",
+      type: "FindOptions<T, TResult, TRels>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+Returns `Promise<TResult | null>` where `TResult` defaults to `T['$inferSelect']`.
+### Example
+
+```typescript
+// Find the first todo
+const firstTodo = await todosService.findFirst()
+if (firstTodo) {
+  console.log('First todo:', firstTodo.title)
+} else {
+  console.log('No todos found')
+}
 ```
 
 ## findOne()
@@ -490,7 +577,7 @@ if (firstPage.nextCursor) {
 }
 ```
 
-## filter()
+## search()
 
 Performs advanced filtering using Business Central style filter expressions with operators like ranges, wildcards, and comparisons.
 
@@ -529,7 +616,7 @@ Filter expressions use the format: `[filterExpression, ...values]`
 
 ```typescript
 // Range filtering (example shown for reference)
-const rangeFilteredTodos = await todosService.filter({
+const rangeFilteredTodos = await todosService.search({
   // Note: Actual filter implementation may vary based on field types
   priority: ['%1|%2', 'high', 'medium'] // High or medium priority
 })
