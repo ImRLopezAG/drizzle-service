@@ -15,8 +15,8 @@ importers:
         specifier: ^2.5.4
         version: 2.5.4
       typescript:
-        specifier: ^5.8
-        version: 5.8.3
+        specifier: 5.9.0-beta
+        version: 5.9.0-beta
 
   apps/docs:
     dependencies:
@@ -98,7 +98,7 @@ importers:
     dependencies:
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.18(@types/react@19.1.8))(postgres@3.4.7)
+        version: 0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.19(@types/react@19.1.8))(postgres@3.4.7)
       effect:
         specifier: ^3.16.13
         version: 3.16.13
@@ -115,15 +115,15 @@ importers:
 
   packages/test:
     dependencies:
+      '@faker-js/faker':
+        specifier: ^9.9.0
+        version: 9.9.0
       drizzle-orm:
         specifier: ^0.44.2
-        version: 0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.18(@types/react@19.1.8))(postgres@3.4.7)
+        version: 0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.19(@types/react@19.1.8))(postgres@3.4.7)
       drizzle-service:
         specifier: workspace:*
         version: link:../../apps/drizzle-service
-      typescript:
-        specifier: ^5.8
-        version: 5.8.3
     devDependencies:
       '@electric-sql/pglite':
         specifier: ^0.3.4
@@ -133,16 +133,19 @@ importers:
         version: 0.15.9
       '@types/bun':
         specifier: latest
-        version: 1.2.18(@types/react@19.1.8)
+        version: 1.2.19(@types/react@19.1.8)
       drizzle-kit:
         specifier: ^0.31.4
         version: 0.31.4
       drizzle-zod:
         specifier: ^0.8.2
-        version: 0.8.2(drizzle-orm@0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.18(@types/react@19.1.8))(postgres@3.4.7))(zod@3.25.71)
+        version: 0.8.2(drizzle-orm@0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.19(@types/react@19.1.8))(postgres@3.4.7))(zod@3.25.71)
+      typescript:
+        specifier: 5.9.0-beta
+        version: 5.9.0-beta
       vite-tsconfig-paths:
         specifier: ^5.1.4
-        version: 5.1.4(typescript@5.8.3)(vite@7.0.1(@types/node@24.0.10)(jiti@2.4.2)(lightningcss@1.30.1))
+        version: 5.1.4(typescript@5.9.0-beta)(vite@7.0.1(@types/node@24.0.10)(jiti@2.4.2)(lightningcss@1.30.1))
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@24.0.10)(@vitest/ui@3.2.4)(jiti@2.4.2)(lightningcss@1.30.1)
@@ -651,6 +654,10 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@faker-js/faker@9.9.0':
+    resolution: {integrity: sha512-OEl393iCOoo/z8bMezRlJu+GlRGlsKbUAN7jKB6LhnKoqKve5DXRpalbItIIcwnCjs1k/FOPjFzcA6Qn+H+YbA==}
+    engines: {node: '>=18.0.0', npm: '>=9.0.0'}
 
   '@floating-ui/core@1.7.2':
     resolution: {integrity: sha512-wNB5ooIKHQc+Kui96jE/n69rHFWAVoxn5CAzL1Xdd8FG03cgY3MLO+GF9U3W737fYDSgPWA6MReKhBQBop6Pcw==}
@@ -1620,8 +1627,8 @@ packages:
   '@ts-morph/common@0.11.1':
     resolution: {integrity: sha512-7hWZS0NRpEsNV8vWJzg7FEz6V8MaLNeJOmwmghqUXTpzk16V1LLZhdo+4QvE/+zv4cVci0OviuJFnqhEfoV3+g==}
 
-  '@types/bun@1.2.18':
-    resolution: {integrity: sha512-Xf6RaWVheyemaThV0kUfaAUvCNokFr+bH8Jxp+tTZfx7dAPA8z9ePnP9S9+Vspzuxxx9JRAXhnyccRj3GyCMdQ==}
+  '@types/bun@1.2.19':
+    resolution: {integrity: sha512-d9ZCmrH3CJ2uYKXQIUuZ/pUnTqIvLDS0SK7pFmbx8ma+ziH/FRMoAq5bYpRG7y+w1gl+HgyNZbtqgMq4W4e2Lg==}
 
   '@types/chai@5.2.2':
     resolution: {integrity: sha512-8kB30R7Hwqf40JPiKhVzodJs2Qc1ZJ5zuT3uzw5Hq/dhNCl3G3l83jfpdI1e20BP348+fV7VIL/+FxaXkqBmWg==}
@@ -1845,8 +1852,8 @@ packages:
   buffer-from@1.1.2:
     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
 
-  bun-types@1.2.18:
-    resolution: {integrity: sha512-04+Eha5NP7Z0A9YgDAzMk5PHR16ZuLVa83b26kH5+cp1qZW4F6FmAURngE7INf4tKOvCE69vYvDEwoNl1tGiWw==}
+  bun-types@1.2.19:
+    resolution: {integrity: sha512-uAOTaZSPuYsWIXRpj7o56Let0g/wjihKCkeRqUBhlLVM/Bt+Fj9xTo+LhC1OV1XDaGkz4hNC80et5xgy+9KTHQ==}
     peerDependencies:
       '@types/react': ^19
 
@@ -3956,6 +3963,11 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  typescript@5.9.0-beta:
+    resolution: {integrity: sha512-p91qoTdwWKj9YEBYavmGiBn0DF4OBElzw4pW4oPbK4HeCfr/SDz9+yviVWshZXGvGvFCJ3AVQ+J7F1UZXc23QQ==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   ufo@1.6.1:
     resolution: {integrity: sha512-9a4/uxlTWJ4+a5i0ooc1rU7C7YOw3wT+UGqdeNNHWnOF9qcMBgLRS+4IYUqbczewFx4mLEig6gawh7X6mFlEkA==}
 
@@ -4645,6 +4657,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.25.5':
     optional: true
+
+  '@faker-js/faker@9.9.0': {}
 
   '@floating-ui/core@1.7.2':
     dependencies:
@@ -5614,9 +5628,9 @@ snapshots:
       mkdirp: 1.0.4
       path-browserify: 1.0.1
 
-  '@types/bun@1.2.18(@types/react@19.1.8)':
+  '@types/bun@1.2.19(@types/react@19.1.8)':
     dependencies:
-      bun-types: 1.2.18(@types/react@19.1.8)
+      bun-types: 1.2.19(@types/react@19.1.8)
     transitivePeerDependencies:
       - '@types/react'
 
@@ -5878,7 +5892,7 @@ snapshots:
 
   buffer-from@1.1.2: {}
 
-  bun-types@1.2.18(@types/react@19.1.8):
+  bun-types@1.2.19(@types/react@19.1.8):
     dependencies:
       '@types/node': 24.0.7
       '@types/react': 19.1.8
@@ -6153,16 +6167,16 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.18(@types/react@19.1.8))(postgres@3.4.7):
+  drizzle-orm@0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.19(@types/react@19.1.8))(postgres@3.4.7):
     optionalDependencies:
       '@electric-sql/pglite': 0.3.4
       '@libsql/client': 0.15.9
-      bun-types: 1.2.18(@types/react@19.1.8)
+      bun-types: 1.2.19(@types/react@19.1.8)
       postgres: 3.4.7
 
-  drizzle-zod@0.8.2(drizzle-orm@0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.18(@types/react@19.1.8))(postgres@3.4.7))(zod@3.25.71):
+  drizzle-zod@0.8.2(drizzle-orm@0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.19(@types/react@19.1.8))(postgres@3.4.7))(zod@3.25.71):
     dependencies:
-      drizzle-orm: 0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.18(@types/react@19.1.8))(postgres@3.4.7)
+      drizzle-orm: 0.44.2(@electric-sql/pglite@0.3.4)(@libsql/client@0.15.9)(bun-types@1.2.19(@types/react@19.1.8))(postgres@3.4.7)
       zod: 3.25.71
 
   dunder-proto@1.0.1:
@@ -8239,6 +8253,10 @@ snapshots:
     optionalDependencies:
       typescript: 5.8.3
 
+  tsconfck@3.1.6(typescript@5.9.0-beta):
+    optionalDependencies:
+      typescript: 5.9.0-beta
+
   tslib@2.8.1: {}
 
   tsup@8.5.0(jiti@2.4.2)(postcss@8.5.6)(typescript@5.8.3):
@@ -8304,6 +8322,8 @@ snapshots:
   typedarray@0.0.6: {}
 
   typescript@5.8.3: {}
+
+  typescript@5.9.0-beta: {}
 
   ufo@1.6.1: {}
 
@@ -8444,17 +8464,6 @@ snapshots:
       - tsx
       - yaml
 
-  vite-tsconfig-paths@5.1.4(typescript@5.8.3)(vite@7.0.1(@types/node@24.0.10)(jiti@2.4.2)(lightningcss@1.30.1)):
-    dependencies:
-      debug: 4.4.1
-      globrex: 0.1.2
-      tsconfck: 3.1.6(typescript@5.8.3)
-    optionalDependencies:
-      vite: 7.0.1(@types/node@24.0.10)(jiti@2.4.2)(lightningcss@1.30.1)
-    transitivePeerDependencies:
-      - supports-color
-      - typescript
-
   vite-tsconfig-paths@5.1.4(typescript@5.8.3)(vite@7.0.1(@types/node@24.0.7)(jiti@2.4.2)(lightningcss@1.30.1)):
     dependencies:
       debug: 4.4.1
@@ -8462,6 +8471,17 @@ snapshots:
       tsconfck: 3.1.6(typescript@5.8.3)
     optionalDependencies:
       vite: 7.0.1(@types/node@24.0.7)(jiti@2.4.2)(lightningcss@1.30.1)
+    transitivePeerDependencies:
+      - supports-color
+      - typescript
+
+  vite-tsconfig-paths@5.1.4(typescript@5.9.0-beta)(vite@7.0.1(@types/node@24.0.10)(jiti@2.4.2)(lightningcss@1.30.1)):
+    dependencies:
+      debug: 4.4.1
+      globrex: 0.1.2
+      tsconfck: 3.1.6(typescript@5.9.0-beta)
+    optionalDependencies:
+      vite: 7.0.1(@types/node@24.0.10)(jiti@2.4.2)(lightningcss@1.30.1)
     transitivePeerDependencies:
       - supports-color
       - typescript

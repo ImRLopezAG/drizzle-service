@@ -1,7 +1,6 @@
 import { DrizzleQueryError } from 'drizzle-orm/errors'
 import { Console, Effect } from 'effect'
 import type {
-	BaseEntity,
 	DatabaseError,
 	Handler,
 	NotFoundError,
@@ -14,30 +13,46 @@ import type {
 function extractCleanErrorDetails(error: any): string {
 	if (error && typeof error === 'object') {
 		const details: string[] = []
-		
+
 		if (error.message) {
 			details.push(`error: ${error.message}`)
 		}
-		
+
 		// Common database error fields across different dialects
 		const dbFields = [
-			'length', 'severity', 'detail', 'hint', 'position', 
-			'internalPosition', 'internalQuery', 'where', 'schema', 
-			'table', 'column', 'dataType', 'constraint', 'file', 
-			'routine', 'code', 'errno', 'sqlState', 'sqlMessage', 'rawCode'
+			'length',
+			'severity',
+			'detail',
+			'hint',
+			'position',
+			'internalPosition',
+			'internalQuery',
+			'where',
+			'schema',
+			'table',
+			'column',
+			'dataType',
+			'constraint',
+			'file',
+			'routine',
+			'code',
+			'errno',
+			'sqlState',
+			'sqlMessage',
+			'rawCode',
 		]
-		
-		dbFields.forEach(field => {
+
+		dbFields.forEach((field) => {
 			if (error[field] !== undefined) {
 				// Format undefined as the string "undefined" for consistency
 				const value = error[field] === undefined ? 'undefined' : error[field]
 				details.push(`${field.padStart(15)}: ${value}`)
 			}
 		})
-		
+
 		return details.join('\n')
 	}
-	
+
 	return `error: ${String(error)}`
 }
 
@@ -49,14 +64,14 @@ function createCleanError(originalError: ServiceError): ServiceError {
 			super(message)
 		}
 	})(originalError.message)
-	
+
 	// Copy other properties but exclude cause
-	Object.keys(originalError).forEach(key => {
+	Object.keys(originalError).forEach((key) => {
 		if (key !== 'cause' && key !== 'stack') {
 			;(cleanError as any)[key] = (originalError as any)[key]
 		}
 	})
-	
+
 	return cleanError as ServiceError
 }
 
@@ -167,9 +182,9 @@ export function tryEffect<T, E = ServiceError>(
 }
 
 // Enhanced handleOptionalErrorHook with clean logging
-export const handleOptionalErrorHook = <T extends BaseEntity>(
+export const handleOptionalErrorHook = <T, O>(
 	error: ServiceError,
-	hooks?: ServiceHooks<T>,
+	hooks?: ServiceHooks<T, O>,
 ): Effect.Effect<never, ServiceError, never> => {
 	const onError = hooks?.onError
 	if (onError) {
@@ -206,7 +221,7 @@ export function tryHandleErrorClean<T>(
 				console.error(`error: ${error.message}`)
 				console.error(`  _tag: "${error._tag}"`)
 			}
-			
+
 			// Return clean error without cause
 			const cleanError = createCleanError(error)
 			return Effect.succeed<[ServiceError, null]>([cleanError, null])
@@ -236,15 +251,15 @@ export function effectErrorHandler(
 	return Effect.fail(cleanError)
 }
 
-export function executeHooks<T>(
+export function executeHooks<_T, TBefore, TAfter = TBefore>(
 	hooks:
 		| {
-				beforeAction?: (data: T) => Promise<void>
-				afterAction?: (data: T) => Promise<void>
+				beforeAction?: (data: TBefore) => Promise<void>
+				afterAction?: (data: TAfter) => Promise<void>
 				onError?: (error: ServiceError) => Promise<void>
 		  }
 		| undefined,
-	data: T,
+	data: any,
 	phase: 'before' | 'after',
 ): Effect.Effect<void, ServiceError, never> {
 	if (!hooks) return Effect.void

@@ -8,5 +8,5 @@ export default defineConfig({
 	verbose: true,
 	casing: "snake_case",
 	schema: "./test/sqlite/schema.ts",
-	out: "./drizzle",
+	out: "./drizzle/sqlite",
 });

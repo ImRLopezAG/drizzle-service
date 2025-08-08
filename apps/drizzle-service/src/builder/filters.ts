@@ -1,11 +1,20 @@
 import {
+	and,
 	asc,
+	between,
 	type Column,
 	desc,
 	eq,
 	gt,
+	gte,
+	inArray,
 	like,
+	lt,
+	lte,
 	ne,
+	not,
+	notInArray,
+	SQL,
 	type SQLWrapper,
 	sql,
 } from 'drizzle-orm'
@@ -13,7 +22,11 @@ import { Effect } from 'effect'
 import { tryEffect } from '@/helpers'
 import { createParserFunction } from './'
 import type {
+	BaseDatabase,
 	BaseEntity,
+	CriteriaFilter,
+	CriteriaFilters,
+	FilterOperators,
 	FindOneOpts,
 	QBuilders,
 	QueryOpts,
@@ -24,9 +37,11 @@ import type {
 
 interface Filters<
 	T extends BaseEntity,
+	DB extends BaseDatabase = BaseDatabase,
 	K extends keyof T['$inferSelect'] = keyof T['$inferSelect'],
 > {
 	table: T
+	db: DB
 	handleILike: (
 		column: Column<T['$inferSelect'][K]>,
 		value: string,
@@ -39,15 +54,16 @@ interface Filters<
 // Function overloads for createFilters
 export function createFilters<
 	T extends BaseEntity,
+	Db extends BaseDatabase,
 	QB extends QBuilders = QBuilders,
->(config: Filters<T>): FiltersReturn<T, QB>
-export function createFilters<T extends BaseEntity>({
+>(config: Filters<T, Db>): FiltersReturn<T, QB>
+export function createFilters<T extends BaseEntity, Db extends BaseDatabase>({
 	table,
 	soft,
 	defaultLimit = 100,
 	maxLimit = 100,
 	handleILike,
-}: Filters<T>) {
+}: Filters<T, Db>) {
 	const lower = (
 		col: Column<T['$inferSelect'][keyof T['$inferSelect']]>,
 	): SQLWrapper => sql`lower(${col})`
@@ -103,16 +119,16 @@ export function createFilters<T extends BaseEntity>({
 
 		// biome-ignore lint/suspicious/noExplicitAny: Join operations change query type
 		let query: any = q
-		for (const { sql, type, table } of relations) {
+		for (const { on, type, table } of relations) {
 			switch (type) {
 				case 'left':
-					query = query.leftJoin(table, sql)
+					query = query.leftJoin(table, on)
 					break
 				case 'inner':
-					query = query.innerJoin(table, sql)
+					query = query.innerJoin(table, on)
 					break
 				case 'right':
-					query = query.rightJoin(table, sql)
+					query = query.rightJoin(table, on)
 					break
 			}
 		}
@@ -289,6 +305,8 @@ export function createFilters<T extends BaseEntity>({
 	): SQLWrapper {
 		const likeOperator = caseSensitive ? like : handleILike
 
+		if (column.enumValues) return eq(column, value)
+
 		switch (matchType) {
 			case 'exact':
 				return eq(column, value)
@@ -302,6 +320,112 @@ export function createFilters<T extends BaseEntity>({
 				return eq(column, value)
 		}
 	}
+
+	function conditionsFromCriteria(
+		criteria: CriteriaFilter<T>,
+		matchType: 'startWith' | 'contains' | 'exact' | 'endsWith',
+		caseSensitive: boolean = false,
+	): SQLWrapper[] {
+		const conditions: SQLWrapper[] = []
+
+		for (const [key, filter] of Object.entries(criteria)) {
+			const column = table[key as keyof BaseEntity] as Column<
+				T['$inferSelect'][keyof T['$inferSelect']]
+			>
+			// Caso: valor primitivo (string, number, Date, etc)
+			if (typeof filter !== 'object' || filter instanceof Date) {
+				conditions.push(
+					createConditionEnhanced(
+						column,
+						filter,
+						matchType || 'exact',
+						caseSensitive,
+					),
+				)
+				continue
+			}
+
+			if ('toSQL' in filter || filter instanceof SQL) {
+				conditions.push(filter)
+				continue
+			}
+
+			const wrapper: SQLWrapper[] = []
+
+			type FilterEntry<T> = {
+				[K in CriteriaFilters]: K extends keyof FilterOperators<T>
+					? FilterOperators<T>[K] extends undefined
+						? never
+						: [K, FilterOperators<T>[K]]
+					: never
+			}[CriteriaFilters]
+
+			function getFilterEntries<T>(
+				filter: FilterOperators<T>,
+			): FilterEntry<T>[] {
+				return Object.entries(filter).filter(
+					([, value]) => value !== undefined,
+				) as FilterEntry<T>[]
+			}
+			for (const [op, value] of getFilterEntries(
+				filter as FilterOperators<T['$inferSelect'][keyof T['$inferSelect']]>,
+			)) {
+				if (value === undefined) continue
+				const columnType = column.columnType
+
+				switch (op) {
+					case '$gt':
+						wrapper.push(gt(column, value))
+						break
+					case '$gte':
+						wrapper.push(gte(column, value))
+						break
+					case '$lt':
+						wrapper.push(lt(column, value))
+						break
+					case '$lte':
+						wrapper.push(lte(column, value))
+						break
+					case '$eq':
+						wrapper.push(eq(column, value))
+						break
+					case '$neq':
+						wrapper.push(not(eq(column, value)))
+						break
+					case '$between':
+						if (columnType === 'number') {
+							wrapper.push(between(column, Number(value[0]), Number(value[1])))
+						} else if (columnType === 'date') {
+							wrapper.push(
+								between(column, new Date(value[0]), new Date(value[1])),
+							)
+						} else {
+							wrapper.push(between(column, value[0], value[1]))
+						}
+						break
+					case '$in':
+						wrapper.push(inArray(column, value))
+						break
+					case '$nin':
+						wrapper.push(notInArray(column, value))
+						break
+					default:
+						wrapper.push(eq(column, value))
+				}
+			}
+			if (wrapper.length === 1) {
+				const valid = wrapper[0]
+				if (!valid) continue
+				conditions.push(valid)
+			} else if (wrapper.length > 1) {
+				const valid = and(...wrapper)
+				if (!valid) continue
+				conditions.push(valid)
+			}
+		}
+		return conditions
+	}
+
 	return {
 		withPagination,
 		withOrderBy,
@@ -315,6 +439,7 @@ export function createFilters<T extends BaseEntity>({
 		handleQueries,
 		handleOneQuery,
 		createConditionEnhanced,
+		conditionsFromCriteria,
 	}
 }
 
@@ -375,4 +500,9 @@ type FiltersReturn<T extends BaseEntity, QB extends QBuilders> = {
 		matchType: 'startWith' | 'contains' | 'exact' | 'endsWith',
 		caseSensitive?: boolean,
 	) => SQLWrapper
+	conditionsFromCriteria: (
+		criteria: CriteriaFilter<T>,
+		matchType: 'startWith' | 'contains' | 'exact' | 'endsWith',
+		caseSensitive?: boolean,
+	) => SQLWrapper[]
 }

@@ -14,7 +14,7 @@ import { setup, setupBeforeAll, setupCreations, populate } from './setup'
 
 setupBeforeAll()
 
-describe('SQLITE Service: Mutation Operations', () => {
+describe('PG Service: Mutation Operations', () => {
 	beforeAll(async () => {
 		await populate(2)
 	})

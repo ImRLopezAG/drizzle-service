@@ -11,14 +11,18 @@
 		"lint": "biome check .",
 		"lint:unsafe": "biome check --write --unsafe .",
 		"lint:write": "biome check --write .",
-		"db:push": "drizzle-kit push",
+		"db:push": "${npm_execpath} run db:push:pg && ${npm_execpath} run db:push:sqlite",
 		"db:push:pg": "drizzle-kit push --config ./drizzle.config.pg.ts",
 		"db:push:sqlite": "drizzle-kit push --config ./drizzle.config.sqlite.ts",
+		"db:gen": "drizzle-kit generate --config ./drizzle.config.pg.ts",
+		"db:gen:pg": "drizzle-kit generate --config ./drizzle.config.pg.ts && drizzle-kit migrate --config ./drizzle.config.pg.ts",
+		"db:gen:sqlite": "drizzle-kit generate --config ./drizzle.config.sqlite.ts && drizzle-kit migrate --config ./drizzle.config.sqlite.ts",
 		"db:studio": "drizzle-kit studio",
 		"db:studio:pg": "drizzle-kit studio --config ./drizzle.config.pg.ts",
 		"db:studio:sqlite": "drizzle-kit studio --config ./drizzle.config.sqlite.ts"
 	},
 	"dependencies": {
+		"@faker-js/faker": "^9.9.0",
 		"drizzle-orm": "^0.44.2",
 		"drizzle-service": "workspace:*"
 	},
@@ -28,12 +32,12 @@
 		"@types/bun": "latest",
 		"drizzle-kit": "^0.31.4",
 		"drizzle-zod": "^0.8.2",
+		"typescript": "5.9.0-beta",
 		"vite-tsconfig-paths": "^5.1.4",
 		"vitest": "^3.2.4",
 		"zod": "^3.25.67"
 	},
 	"peerDependencies": {
-		"drizzle-orm": "^0.44.2",
-		"typescript": "^5.8"
+		"drizzle-orm": "^0.44.2"
 	}
 }

@@ -59,7 +59,7 @@ type SalesLineInsert = typeof salesLines.$inferInsert
 type ItemEntrySelect = typeof itemEntry.$inferSelect
 type ItemEntryInsert = typeof itemEntry.$inferInsert
 
-describe('SQLITE Service Types - Complex Schema', () => {
+describe('PostgreSQL Service Types - Complex Schema', () => {
 	describe('Base Service Structure', () => {
 		it('should have correct Service interface structure for all entities', () => {
 			expectTypeOf(itemService).toExtend<Service<ItemEntity, Db>>()
@@ -140,7 +140,7 @@ describe('SQLITE Service Types - Complex Schema', () => {
 			expectTypeOf(salesService.findOne).parameter(0).toEqualTypeOf<string>()
 			expectTypeOf(salesLinesService.findOne)
 				.parameter(0)
-				.toEqualTypeOf<number | null>()
+				.toEqualTypeOf<number>()
 			expectTypeOf(itemEntryService.findOne)
 				.parameter(0)
 				.toEqualTypeOf<number>()
@@ -247,7 +247,7 @@ describe('SQLITE Service Types - Complex Schema', () => {
 			expectTypeOf(salesService.update).parameter(0).toEqualTypeOf<string>()
 			expectTypeOf(salesLinesService.update)
 				.parameter(0)
-				.toEqualTypeOf<number | null>()
+				.toEqualTypeOf<number>()
 			expectTypeOf(itemEntryService.update).parameter(0).toEqualTypeOf<number>()
 
 			// Test update data parameter types
@@ -297,7 +297,7 @@ describe('SQLITE Service Types - Complex Schema', () => {
 			expectTypeOf(salesService.delete).parameter(0).toEqualTypeOf<string>()
 			expectTypeOf(salesLinesService.delete)
 				.parameter(0)
-				.toEqualTypeOf<number  | null>()
+				.toEqualTypeOf<number>()
 			expectTypeOf(itemEntryService.delete).parameter(0).toEqualTypeOf<number>()
 
 			// Test return types
@@ -336,7 +336,7 @@ describe('SQLITE Service Types - Complex Schema', () => {
 			expectTypeOf(salesService.hardDelete).parameter(0).toEqualTypeOf<string>()
 			expectTypeOf(salesLinesService.hardDelete)
 				.parameter(0)
-				.toEqualTypeOf<number | null>()
+				.toEqualTypeOf<number>()
 			expectTypeOf(itemEntryService.hardDelete)
 				.parameter(0)
 				.toEqualTypeOf<number>()
@@ -510,7 +510,7 @@ describe('SQLITE Service Types - Complex Schema', () => {
 				.toEqualTypeOf<string[]>()
 			expectTypeOf(salesLinesService.bulkDelete)
 				.parameter(0)
-				.toEqualTypeOf<Array<number | null>>()
+				.toEqualTypeOf<number[]>()
 			expectTypeOf(itemEntryService.bulkDelete)
 				.parameter(0)
 				.toEqualTypeOf<number[]>()
@@ -555,7 +555,7 @@ describe('SQLITE Service Types - Complex Schema', () => {
 				.toEqualTypeOf<string[]>()
 			expectTypeOf(salesLinesService.bulkHardDelete)
 				.parameter(0)
-				.toEqualTypeOf<Array<number | null>>()
+				.toEqualTypeOf<number[]>()
 			expectTypeOf(itemEntryService.bulkHardDelete)
 				.parameter(0)
 				.toEqualTypeOf<number[]>()
@@ -793,7 +793,7 @@ describe('SQLITE Service Types - Complex Schema', () => {
 					| 'POS_TRANSACTION'
 				amount: number
 				tax: number
-				lineNo: number | null
+				lineNo: number
 				itemNo: string
 				itemType: 'ITEM' | 'SERVICE' | 'BUNDLE' | ' '
 				quantity: number
@@ -851,7 +851,7 @@ describe('SQLITE Service Types - Complex Schema', () => {
 			// The service should accept the composite key as ID parameter
 			expectTypeOf(salesLinesService.findOne)
 				.parameter(0)
-				.toEqualTypeOf<number | null>()
+				.toEqualTypeOf<number>()
 		})
 
 		it('should handle composite primary key types for item entries', () => {

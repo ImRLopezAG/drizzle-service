@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { faker } from '@faker-js/faker'
 import { z } from 'zod/v4'
-import { schema, service } from './schema'
+import { db, schema, service } from './schema'
 
 export {schema}
 export type SchemaKeys = keyof typeof schema
@@ -29,6 +29,7 @@ export const salesService = service(schema.salesHeaders, {
 		deletedValue: 'CANCELED',
 		notDeletedValue: 'DRAFT',
 	},
+	query: db.query.salesHeaders,
 	getSalesWithLines: async () => {
 		return await salesService.db.query.salesHeaders.findMany({
 			with: {

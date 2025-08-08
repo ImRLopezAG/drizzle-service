@@ -1,6 +1,7 @@
 import { createFilters } from '@builder/filters'
 import type {
 	BulkOperationResult,
+	CriteriaFilter,
 	FilterCriteria,
 	FindByQueryOpts,
 	FindOneOpts,
@@ -12,15 +13,12 @@ import type {
 	QueryOpts,
 	RelationType,
 	Service,
-	ServiceHooks,
 	ServiceMethods,
 	SQLiteDb,
 	WithRelations,
-	ExtendedServiceHooks
 } from '@builder/types'
 import {
 	and,
-	type Column,
 	count,
 	eq,
 	getTableName,
@@ -46,6 +44,7 @@ export const createSqliteService = createService<SQLiteDb>(
 		type D = typeof db
 		type T = typeof table
 		type O = typeof opts
+
 		const {
 			defaultLimit = 100,
 			maxLimit = 1000,
@@ -66,9 +65,10 @@ export const createSqliteService = createService<SQLiteDb>(
 			parseFilterExpression,
 			handleQueries,
 			handleOneQuery,
-			createConditionEnhanced,
-		} = createFilters<T>({
+			conditionsFromCriteria,
+		} = createFilters<T, D>({
 			table,
+			db,
 			soft,
 			defaultLimit,
 			maxLimit,
@@ -95,12 +95,12 @@ export const createSqliteService = createService<SQLiteDb>(
 		// 🚀 QUERY OPERATIONS
 		// ===============================
 
-		const _queryOperations: QueryOperations<T, O> = {
+		const _queryOperations: QueryOperations<T, D, O> = {
 			find: <
 				TRels extends WithRelations[] = [],
 				TResult = TRels['length'] extends 0
 					? T['$inferSelect'][]
-					: RelationType<T, TRels>[],
+					: RelationType<T, TRels>[]
 			>(
 				opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
 			) => {
@@ -244,24 +244,19 @@ export const createSqliteService = createService<SQLiteDb>(
 					? T['$inferSelect'][]
 					: RelationType<T, TRels>[],
 			>(
-				criteria: Partial<T['$inferSelect']>,
+				criteria: CriteriaFilter<T>,
 				opts: FindByQueryOpts<T, TResult, TRels> = {} as FindByQueryOpts<
 					T,
 					TResult,
 					TRels
 				>,
 			) => {
-				const conditions = Object.entries(criteria).map(([key, value]) => {
-					const column = table[key as keyof T] as Column<
-						T['$inferSelect'][keyof T['$inferSelect']]
-					>
-					return createConditionEnhanced(
-						column,
-						value,
-						opts.match || 'exact',
-						opts.caseSensitive,
-					)
-				})
+				const conditions = conditionsFromCriteria(
+					criteria,
+					opts.match || 'exact',
+					opts.caseSensitive ?? false,
+				)
+
 				const { custom, ...restOpts } = opts
 				if (custom) {
 					conditions.push(custom)
@@ -281,24 +276,19 @@ export const createSqliteService = createService<SQLiteDb>(
 					? T['$inferSelect'][]
 					: RelationType<T, TRels>[],
 			>(
-				criteria: Partial<T['$inferSelect']>,
+				criteria: CriteriaFilter<T>,
 				opts: FindByQueryOpts<T, TResult, TRels> = {} as FindByQueryOpts<
 					T,
 					TResult,
 					TRels
 				>,
 			) => {
-				const conditions = Object.entries(criteria).map(([key, value]) => {
-					const column = table[key as keyof T] as Column<
-						T['$inferSelect'][keyof T['$inferSelect']]
-					>
-					return createConditionEnhanced(
-						column,
-						value,
-						opts.match || 'contains',
-						opts.caseSensitive,
-					)
-				})
+				const conditions = conditionsFromCriteria(
+					criteria,
+					opts.match || 'exact',
+					opts.caseSensitive ?? false,
+				)
+
 				const { custom, ...restOpts } = opts
 
 				return handleError(
@@ -310,27 +300,6 @@ export const createSqliteService = createService<SQLiteDb>(
 					}),
 				)
 			},
-
-			findByField: <
-				K extends keyof T['$inferSelect'],
-				TRels extends WithRelations[] = [],
-				TResult = TRels['length'] extends 0
-					? T['$inferSelect'][]
-					: RelationType<T, TRels>[],
-			>(
-				field: K,
-				value: T['$inferSelect'][K],
-				opts: QueryOpts<T, TResult, TRels> = {},
-			) => {
-				return handleError(
-					handleQueries<TResult, TRels>(createBaseQuery(), opts, {
-						beforeParse(q) {
-							return q.where(eq(table[field] as SQLWrapper, value))
-						},
-					}),
-				)
-			},
-
 			search: <
 				TRels extends WithRelations[] = [],
 				TResult = TRels['length'] extends 0
@@ -359,6 +328,7 @@ export const createSqliteService = createService<SQLiteDb>(
 					}),
 				)
 			},
+			
 		}
 
 		// ===============================
@@ -406,7 +376,7 @@ export const createSqliteService = createService<SQLiteDb>(
 			update: (
 				id: IdType<T, O>,
 				data: Partial<Omit<T['$inferInsert'], 'id' | 'createdAt'>>,
-				hooks?: 	ExtendedServiceHooks<T>,
+				hooks?,
 			) => {
 				return tryHandleError(
 					Effect.gen(function* () {
@@ -447,7 +417,9 @@ export const createSqliteService = createService<SQLiteDb>(
 									query: db
 										.update(table)
 										.set(updateData)
-										.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
+										.where(
+											hooks?.custom || eq(table[idField] as SQLWrapper, id),
+										)
 										.toSQL(),
 								},
 							)
@@ -471,10 +443,12 @@ export const createSqliteService = createService<SQLiteDb>(
 								.onConflictDoUpdate({
 									target: table[getIdField()] as IndexColumn,
 									set: data,
-									setWhere: hooks?.custom || eq(
-										table[getIdField()] as SQLWrapper,
-										data[getIdField() as keyof T['$inferInsert']],
-									),
+									setWhere:
+										hooks?.custom ||
+										eq(
+											table[getIdField()] as SQLWrapper,
+											data[getIdField() as keyof T['$inferInsert']],
+										),
 								})
 								.returning()
 								.execute()
@@ -493,10 +467,12 @@ export const createSqliteService = createService<SQLiteDb>(
 										.onConflictDoUpdate({
 											target: table[getIdField()] as IndexColumn,
 											set: data,
-											setWhere: hooks?.custom || eq(
-												table[getIdField()] as SQLWrapper,
-												data[getIdField() as keyof T['$inferInsert']],
-											),
+											setWhere:
+												hooks?.custom ||
+												eq(
+													table[getIdField()] as SQLWrapper,
+													data[getIdField() as keyof T['$inferInsert']],
+												),
 										})
 										.toSQL(),
 								},
@@ -717,10 +693,13 @@ export const createSqliteService = createService<SQLiteDb>(
 		// ===============================
 
 		const _bulkOperations: MutationsBulkOperations<T, O> = {
-			bulkCreate: (data: T['$inferInsert'][], hooks) => {
+			bulkCreate: (data: T['$inferInsert'][], hooks?) => {
 				return handleError(
 					Effect.gen(function* () {
-						const result: BulkOperationResult<T['$inferSelect'][], T> = {
+						const result: {
+							batch: BulkOperationResult<T['$inferSelect'][], T>[0]
+							data: BulkOperationResult<T['$inferSelect'][], T>[1]
+						} = {
 							batch: {
 								size: batchSize,
 								processed: 0,
@@ -731,7 +710,10 @@ export const createSqliteService = createService<SQLiteDb>(
 						}
 
 						if (data.length === 0) {
-							return result
+							return [result.batch, result.data] as BulkOperationResult<
+								T['$inferSelect'][],
+								T
+							>
 						}
 
 						const insertData = data.map((item) => ({
@@ -774,7 +756,10 @@ export const createSqliteService = createService<SQLiteDb>(
 						}
 
 						yield* executeHooks(hooks, result.data, 'after')
-						return result
+						return [result.batch, result.data] as BulkOperationResult<
+							T['$inferSelect'][],
+							T
+						>
 					}).pipe(
 						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
 					),
@@ -786,11 +771,14 @@ export const createSqliteService = createService<SQLiteDb>(
 					id: IdType<T, O>
 					changes: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>
 				}>,
-				hooks?: ServiceHooks<T>,
+				hooks?,
 			) => {
 				return handleError(
 					Effect.gen(function* () {
-						const result: BulkOperationResult<T['$inferSelect'][], T> = {
+						const result: {
+							batch: BulkOperationResult<T['$inferSelect'][], T>[0]
+							data: BulkOperationResult<T['$inferSelect'][], T>[1]
+						} = {
 							batch: {
 								size: batchSize,
 								processed: 0,
@@ -801,7 +789,10 @@ export const createSqliteService = createService<SQLiteDb>(
 						}
 
 						if (data.length === 0) {
-							return result
+							return [result.batch, result.data] as BulkOperationResult<
+								T['$inferSelect'][],
+								T
+							>
 						}
 
 						yield* executeHooks(hooks, data, 'before')
@@ -850,20 +841,29 @@ export const createSqliteService = createService<SQLiteDb>(
 
 						yield* executeHooks(hooks, result.data, 'after')
 
-						return result
+						return [result.batch, result.data] as BulkOperationResult<
+							T['$inferSelect'][],
+							T
+						>
 					}).pipe(
 						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
 					),
 				)
 			},
 
-			bulkDelete: (ids: IdType<T, O>[], hooks) => {
+			bulkDelete: (ids: IdType<T, O>[], hooks?) => {
 				return handleError(
 					Effect.gen(function* () {
-						const result: BulkOperationResult<
-							{ readonly success: boolean; readonly message?: string },
-							T
-						> = {
+						const result: {
+							batch: BulkOperationResult<
+								{ readonly success: boolean; readonly message?: string },
+								T
+							>[0]
+							data: BulkOperationResult<
+								{ readonly success: boolean; readonly message?: string },
+								T
+							>[1]
+						} = {
 							batch: {
 								size: batchSize,
 								processed: 0,
@@ -875,7 +875,10 @@ export const createSqliteService = createService<SQLiteDb>(
 
 						if (ids.length === 0) {
 							result.data = { success: true, message: 'No records to delete' }
-							return result
+							return [result.batch, result.data] as BulkOperationResult<
+								{ readonly success: boolean; readonly message?: string },
+								T
+							>
 						}
 
 						if (!soft) {
@@ -891,7 +894,10 @@ export const createSqliteService = createService<SQLiteDb>(
 									error: `Soft delete is not enabled for the entity: ${entityName}`,
 								})
 							}
-							return result
+							return [result.batch, result.data] as BulkOperationResult<
+								{ readonly success: boolean; readonly message?: string },
+								T
+							>
 						}
 
 						if (hooks?.beforeAction) {
@@ -987,126 +993,148 @@ export const createSqliteService = createService<SQLiteDb>(
 							yield* executeHooks(hooks, ids, 'after')
 						}
 
-						return result
+						return [result.batch, result.data] as BulkOperationResult<
+							{ readonly success: boolean; readonly message?: string },
+							T
+						>
 					}).pipe(
 						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
 					),
 				)
 			},
 
-			bulkHardDelete: (ids: IdType<T, O>[], hooks) => {
-				return Effect.gen(function* () {
-					const result: BulkOperationResult<
-						{ readonly success: boolean; readonly message?: string },
-						T
-					> = {
-						batch: {
-							size: batchSize,
-							processed: 0,
-							failed: 0,
-							errors: [],
-						},
-						data: { success: false },
-					}
+			bulkHardDelete: (ids: IdType<T, O>[], hooks?) => {
+				return handleError(
+					Effect.gen(function* () {
+						const result: {
+							batch: BulkOperationResult<
+								{ readonly success: boolean; readonly message?: string },
+								T
+							>[0]
+							data: BulkOperationResult<
+								{ readonly success: boolean; readonly message?: string },
+								T
+							>[1]
+						} = {
+							batch: {
+								size: batchSize,
+								processed: 0,
+								failed: 0,
+								errors: [],
+							},
+							data: { success: false },
+						}
 
-					if (ids.length === 0) {
-						result.data = { success: true, message: 'No records to delete' }
-						return result
-					}
+						if (ids.length === 0) {
+							result.data = { success: true, message: 'No records to delete' }
+							return [result.batch, result.data] as BulkOperationResult<
+								{ readonly success: boolean; readonly message?: string },
+								T
+							>
+						}
 
-					if (hooks?.beforeAction) {
-						yield* executeHooks(hooks, ids, 'before')
-					}
+						if (hooks?.beforeAction) {
+							yield* executeHooks(hooks, ids, 'before')
+						}
 
-					const batches = createBatches(ids, batchSize)
-					const idField = getIdField()
+						const batches = createBatches(ids, batchSize)
+						const idField = getIdField()
 
-					for (const batch of batches) {
-						try {
-							// First, get the entities that will be deleted for hooks
-							const existingData = yield* tryEffect(async () => {
-								return await createBaseQuery().where(
-									inArray(table[idField] as SQLWrapper, batch),
-								)
-							})
+						for (const batch of batches) {
+							try {
+								// First, get the entities that will be deleted for hooks
+								const existingData = yield* tryEffect(async () => {
+									return await createBaseQuery().where(
+										inArray(table[idField] as SQLWrapper, batch),
+									)
+								})
 
-							if (existingData.length === 0) {
-								// All records in this batch are missing
+								if (existingData.length === 0) {
+									// All records in this batch are missing
+									result.batch.failed += batch.length
+									for (const id of batch) {
+										result.batch.errors?.push({
+											id,
+											error: 'Record not found',
+										})
+									}
+									continue
+								}
+
+								// Perform the hard delete
+								yield* tryEffect(async () => {
+									await db
+										.delete(table)
+										.where(inArray(table[idField] as SQLWrapper, batch))
+								})
+
+								result.batch.processed += existingData.length
+
+								// Track failed deletes within the batch
+								if (existingData.length < batch.length) {
+									const failedCount = batch.length - existingData.length
+									result.batch.failed += failedCount
+								}
+							} catch (error) {
 								result.batch.failed += batch.length
 								for (const id of batch) {
 									result.batch.errors?.push({
 										id,
-										error: 'Record not found',
+										error:
+											error instanceof Error ? error.message : 'Unknown error',
 									})
 								}
-								continue
-							}
-
-							// Perform the hard delete
-							yield* tryEffect(async () => {
-								await db
-									.delete(table)
-									.where(inArray(table[idField] as SQLWrapper, batch))
-							})
-
-							result.batch.processed += existingData.length
-
-							// Track failed deletes within the batch
-							if (existingData.length < batch.length) {
-								const failedCount = batch.length - existingData.length
-								result.batch.failed += failedCount
-							}
-						} catch (error) {
-							result.batch.failed += batch.length
-							for (const id of batch) {
-								result.batch.errors?.push({
-									id,
-									error:
-										error instanceof Error ? error.message : 'Unknown error',
-								})
 							}
 						}
-					}
 
-					// Set final result data
-					const totalRequested = ids.length
-					const successful = result.batch.processed
-					const failed = result.batch.failed
+						// Set final result data
+						const totalRequested = ids.length
+						const successful = result.batch.processed
+						const failed = result.batch.failed
 
-					if (failed === 0) {
-						result.data = {
-							success: true,
-							message: `Successfully hard deleted ${successful} records`,
+						if (failed === 0) {
+							result.data = {
+								success: true,
+								message: `Successfully hard deleted ${successful} records`,
+							}
+						} else if (successful === 0) {
+							result.data = {
+								success: false,
+								message: `Failed to hard delete all ${totalRequested} records`,
+							}
+						} else {
+							result.data = {
+								success: true,
+								message: `Partially successful: ${successful} hard deleted, ${failed} failed`,
+							}
 						}
-					} else if (successful === 0) {
-						result.data = {
-							success: false,
-							message: `Failed to hard delete all ${totalRequested} records`,
-						}
-					} else {
-						result.data = {
-							success: true,
-							message: `Partially successful: ${successful} hard deleted, ${failed} failed`,
-						}
-					}
 
-					if (hooks?.afterAction) {
-						yield* executeHooks(hooks, ids, 'after')
-					}
+						if (hooks?.afterAction) {
+							yield* executeHooks(hooks, ids, 'after')
+						}
 
-					return result
-				}).pipe(
-					Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
-					Effect.runPromise,
+						return [result.batch, result.data] as BulkOperationResult<
+								{ readonly success: boolean; readonly message?: string },
+								T
+							>
+					}).pipe(
+						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+					),
 				)
 			},
 
-			bulkRestore: (ids: IdType<T, O>[], hooks) => {
+			bulkRestore: (ids: IdType<T, O>[], hooks?) => {
 				return Effect.gen(function* () {
-					const result: BulkOperationResult<
-						{ readonly success: boolean; readonly message?: string },
-						T
-					> = {
+					const result: {
+						batch: BulkOperationResult<
+							{ readonly success: boolean; readonly message?: string },
+							T
+						>[0]
+						data: BulkOperationResult<
+							{ readonly success: boolean; readonly message?: string },
+							T
+						>[1]
+					} = {
 						batch: {
 							size: batchSize,
 							processed: 0,
@@ -1118,7 +1146,10 @@ export const createSqliteService = createService<SQLiteDb>(
 
 					if (ids.length === 0) {
 						result.data = { success: true, message: 'No records to restore' }
-						return result
+						return [result.batch, result.data] as BulkOperationResult<
+							{ readonly success: boolean; readonly message?: string },
+							T
+						>
 					}
 
 					if (!soft) {
@@ -1134,7 +1165,10 @@ export const createSqliteService = createService<SQLiteDb>(
 								error: `Soft delete is not enabled for the entity: ${entityName}`,
 							})
 						}
-						return result
+						return [result.batch, result.data] as BulkOperationResult<
+							{ readonly success: boolean; readonly message?: string },
+							T
+						>
 					}
 
 					if (hooks?.beforeAction) {
@@ -1239,18 +1273,54 @@ export const createSqliteService = createService<SQLiteDb>(
 						yield* executeHooks(hooks, ids, 'after')
 					}
 
-					return result
+					return [result.batch, result.data] as BulkOperationResult<
+								{ readonly success: boolean; readonly message?: string },
+								T
+							>
 				}).pipe(
 					Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
 					Effect.runPromise,
 				)
 			},
 		}
-
-		const baseMethods: ServiceMethods<T, O> = {
+		const baseMethods: ServiceMethods<T, D, O> = {
 			..._queryOperations,
 			..._mutationOperations,
 			..._bulkOperations,
+		}
+
+		const _ = {
+			...baseMethods,
+			searchTyped: <
+				TRels extends WithRelations[] = [],
+				TResult = TRels['length'] extends 0
+					? T['$inferSelect'][]
+					: RelationType<T, TRels>[],
+			>(
+				criteria: CriteriaFilter<T>,
+				opts: FindByQueryOpts<T, TResult, TRels> = {} as FindByQueryOpts<
+					T,
+					TResult,
+					TRels
+				>,
+			) => {
+				const conditions = conditionsFromCriteria(
+					criteria,
+					opts.match || 'exact',
+					opts.caseSensitive ?? false,
+				)
+
+				const { custom, ...restOpts } = opts
+				return handleError(
+					handleQueries(createBaseQuery(), restOpts, {
+						beforeParse(query) {
+							if (!conditions.length) return query
+							if (custom) return query.where(or(custom, and(...conditions)))
+							return query.where(and(...conditions))
+						},
+					}),
+				)
+			},
 		}
 
 		const baseService = {
@@ -1258,9 +1328,9 @@ export const createSqliteService = createService<SQLiteDb>(
 			...(override ? override(baseMethods) : {}),
 		}
 
-		const repository: Service<T, D> = {
+		const repository: Service<T, D, O> = {
 			...baseService,
-			_: baseMethods,
+			_,
 			entityName: entityName,
 			db,
 			entity: table,
@@ -1269,6 +1339,6 @@ export const createSqliteService = createService<SQLiteDb>(
 		return {
 			...repository,
 			...rest,
-		} as Service<T, D> & O
+		} as Service<T, D, O> & O
 	},
 )

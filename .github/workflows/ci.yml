@@ -44,8 +44,7 @@ jobs:
         
       - name: Push database schema
         run: |
-            pnpm db:push:pg
-            pnpm db:push:sqlite
+            pnpm db:push
 
       - name: Run tests
         run: pnpm test

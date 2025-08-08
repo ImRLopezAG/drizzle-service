@@ -4,9 +4,9 @@ export default defineConfig({
 	driver: 'pglite',
 	verbose: true,
 	dbCredentials: {
-		url: 'file:./test/postgres/db.sql',
+		url: 'file:./test/pg/db.sql',
 	},
 	casing: 'snake_case',
-	schema: './test/postgres/schema.ts',
-	out: './drizzle',
+	schema: './test/pg/schema.ts',
+	out: './drizzle/pg',
 })

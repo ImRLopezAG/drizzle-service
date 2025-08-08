@@ -22,7 +22,7 @@
   "devDependencies": {
     "turbo": "^2.5.4",
     "@repo/type-config": "workspace:*",
-    "typescript": "^5.8"
+    "typescript": "5.9.0-beta"
   },
   "workspaces": [
     "apps/*",
