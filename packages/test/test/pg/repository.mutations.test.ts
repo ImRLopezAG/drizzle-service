@@ -5,12 +5,14 @@ import {
 	mockItem,
 	mockSaleHeader,
 	mockUser,
+	salesLinesService,
 	salesService,
 	storeService,
 	userSchema,
 	userService,
 } from './repository'
-import { setup, setupBeforeAll, setupCreations, populate } from './setup'
+import { populate, setup, setupBeforeAll, setupCreations } from './setup'
+import { eq } from 'drizzle-orm'
 
 setupBeforeAll()
 
@@ -460,5 +462,27 @@ describe('PG Service: Mutation Operations', () => {
 		expect(sale?.storeId).toBe(salesHeaderData.storeId)
 		expect(sale?.status).toBe(salesHeaderData.status)
 		expect(sale?.amount).toBe(salesHeaderData.amount)
+	})
+
+	it('should update sales lines with custom statement', async () => {
+		const store = await setupCreations.stores()
+		const salesHeader = await salesService.mockHeader(store.id)
+
+		const [error, updated] = await salesLinesService.update(1, {
+			description: 'Updated description',
+		}, {
+			custom: eq(salesLinesService.entity.documentNo, salesHeader.id),
+		})
+
+		expect(error).toBeNull()
+
+		const updatedLine = await salesLinesService.query.findMany({
+			where({ documentNo }, { eq }) {
+				return eq(documentNo, salesHeader.id)
+			},
+		})
+
+		expect(updatedLine).toBeDefined()
+		expect(updatedLine.every((line) => line.description === 'Updated description')).toBe(true)
 	})
 })

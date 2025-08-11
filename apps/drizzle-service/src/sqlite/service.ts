@@ -2,6 +2,7 @@ import { createFilters } from '@builder/filters'
 import type {
 	BulkOperationResult,
 	CriteriaFilter,
+	ExtendedServiceHooks,
 	FilterCriteria,
 	FindByQueryOpts,
 	FindOneOpts,
@@ -44,6 +45,8 @@ export const createSqliteService = createService<SQLiteDb>(
 		type D = typeof db
 		type T = typeof table
 		type O = typeof opts
+
+		type Hooks<V = false> = ExtendedServiceHooks<T['$inferInsert'], V extends true ? T['$inferSelect'][] : T['$inferSelect'] > | undefined
 
 		const {
 			defaultLimit = 100,
@@ -335,6 +338,7 @@ export const createSqliteService = createService<SQLiteDb>(
 		// 🚀 MUTATION OPERATIONS
 		// ===============================
 
+
 		const _mutationOperations: MutationOperations<T, O> = {
 			create: (data: T['$inferInsert'], hooks) => {
 				return tryHandleError(
@@ -385,28 +389,29 @@ export const createSqliteService = createService<SQLiteDb>(
 							async () => await _queryOperations.findOne(id),
 						)
 
-						if (!entity) {
-							return {
-								success: false,
-								message: `Entity with id ${id} not found`,
-							}
-						}
+						if (!entity) return yield* createNotFoundError(entityName, id)
 
 						const updateData = {
 							...data,
 							updatedAt: new Date(),
 						}
-						yield* executeHooks(hooks, updateData, 'before')
+						yield* executeHooks(hooks as Hooks, updateData, 'before')
 
 						const result = yield* tryEffect(async () => {
-							const [result] = await db
+							const data = await db
 								.update(table)
 								.set(updateData)
 								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 								.returning()
 								.execute()
-
-							return result
+								if(!hooks?.custom) {
+									const result = data[0]
+									if (!result || data.length === 0) {
+										throw createNotFoundError(entityName, id)
+									}
+									return result as T['$inferSelect']
+								}
+							return data as T['$inferSelect'][]
 						})
 
 						if (!result) {
@@ -424,10 +429,11 @@ export const createSqliteService = createService<SQLiteDb>(
 								},
 							)
 						}
-						yield* executeHooks(hooks, result, 'after')
-						return result
+						
+						yield* executeHooks(hooks as Hooks<true>, result, 'after')
+						return result as any
 					}).pipe(
-						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks as Hooks)),
 					),
 				)
 			},
@@ -444,7 +450,6 @@ export const createSqliteService = createService<SQLiteDb>(
 									target: table[getIdField()] as IndexColumn,
 									set: data,
 									setWhere:
-										hooks?.custom ||
 										eq(
 											table[getIdField()] as SQLWrapper,
 											data[getIdField() as keyof T['$inferInsert']],
@@ -468,7 +473,6 @@ export const createSqliteService = createService<SQLiteDb>(
 											target: table[getIdField()] as IndexColumn,
 											set: data,
 											setWhere:
-												hooks?.custom ||
 												eq(
 													table[getIdField()] as SQLWrapper,
 													data[getIdField() as keyof T['$inferInsert']],

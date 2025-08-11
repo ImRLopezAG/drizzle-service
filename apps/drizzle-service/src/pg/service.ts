@@ -2,9 +2,11 @@ import { createFilters } from '@builder/filters'
 import type {
 	BulkOperationResult,
 	CriteriaFilter,
+	ExtendedServiceHooks,
 	FilterCriteria,
 	FindByQueryOpts,
 	FindOneOpts,
+	Handler,
 	IdType,
 	MutationOperations,
 	MutationsBulkOperations,
@@ -25,6 +27,7 @@ import {
 	ilike,
 	inArray,
 	or,
+	SQL,
 	type SQLWrapper,
 } from 'drizzle-orm'
 import type { IndexColumn } from 'drizzle-orm/pg-core'
@@ -45,6 +48,9 @@ export const createPostgresService = createService<PostgresDb>(
 		type D = typeof db
 		type T = typeof table
 		type O = typeof opts
+
+				type Hooks<V = false> = ExtendedServiceHooks<T['$inferInsert'], V extends true ? T['$inferSelect'][] : T['$inferSelect'] > | undefined
+		
 
 		const {
 			defaultLimit = 100,
@@ -368,10 +374,10 @@ export const createPostgresService = createService<PostgresDb>(
 				)
 			},
 
-			update: (
+			update:(
 				id: IdType<T, O>,
 				data: Partial<Omit<T['$inferInsert'], 'id' | 'createdAt'>>,
-				hooks?,
+				hooks,
 			) => {
 				return tryHandleError(
 					Effect.gen(function* () {
@@ -381,27 +387,30 @@ export const createPostgresService = createService<PostgresDb>(
 						)
 
 						if (!entity) {
-							return {
-								success: false,
-								message: `Entity with id ${id} not found`,
-							}
+							return yield* createNotFoundError(entityName, id)
 						}
 
 						const updateData = {
 							...data,
 							updatedAt: new Date(),
 						}
-						yield* executeHooks(hooks, updateData, 'before')
+						yield* executeHooks(hooks as Hooks, updateData, 'before')
 
 						const result = yield* tryEffect(async () => {
-							const [result] = await db
+							const data = await db
 								.update(table)
 								.set(updateData)
 								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 								.returning()
 								.execute()
-
-							return result
+								if(!hooks?.custom) {
+									const result = data[0]
+									if (!result || data.length === 0) {
+										throw createNotFoundError(entityName, id)
+									}
+									return result as T['$inferSelect']
+								}
+							return data as T['$inferSelect'][]
 						})
 
 						if (!result) {
@@ -419,10 +428,10 @@ export const createPostgresService = createService<PostgresDb>(
 								},
 							)
 						}
-						yield* executeHooks(hooks, result, 'after')
-						return result
+						yield* executeHooks(hooks as Hooks<true>, result, 'after')
+						return result as any
 					}).pipe(
-						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks as Hooks)),
 					),
 				)
 			},
@@ -461,7 +470,6 @@ export const createPostgresService = createService<PostgresDb>(
 											target: table[getIdField()] as IndexColumn,
 											set: data,
 											setWhere:
-												hooks?.custom ||
 												eq(
 													table[getIdField()] as SQLWrapper,
 													data[getIdField() as keyof T['$inferInsert']],
@@ -537,7 +545,7 @@ export const createPostgresService = createService<PostgresDb>(
 							return yield* createNotFoundError(entityName, id)
 						}
 
-						yield* executeHooks(hooks, entity, 'before')
+						yield* executeHooks(hooks as Hooks, entity, 'before')
 						const result = yield* tryEffect(async () => {
 							const updated = await db
 								.update(table)
@@ -549,23 +557,19 @@ export const createPostgresService = createService<PostgresDb>(
 								.returning()
 								.execute()
 
-							if (updated.length === 0) {
-								return new Error(
-									`Failed to soft delete ${entityName} with id ${id}`,
-								)
-							}
+							if (!hooks?.custom) return updated[0] as T['$inferSelect']
 
-							return updated[0] as T['$inferSelect']
+							return updated as T['$inferSelect'][]
 						})
 
-						yield* executeHooks(hooks, result, 'after')
+						yield* executeHooks(hooks as Hooks<true>, result, 'after')
 
 						return {
 							success: true,
 							message: 'successfully soft deleted',
 						}
 					}).pipe(
-						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
+						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks as Hooks)),
 					),
 				)
 			},

@@ -1,7 +1,7 @@
 import { createClient } from '@libsql/client'
 import { relations, type SQL, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
-import { index, primaryKey, sqliteTable } from 'drizzle-orm/sqlite-core'
+import { index, sqliteTable } from 'drizzle-orm/sqlite-core'
 import { drizzleService } from 'drizzle-service/sqlite'
 
 export const itemType = ['ITEM', 'SERVICE', 'BUNDLE', ' '] as const
@@ -222,7 +222,7 @@ export const salesHeaders = sqliteTable(
 export const salesLines = sqliteTable(
 	'sales_lines',
 	(t) => ({
-		lineNo: t.integer('line_no', {mode: 'number'}),
+		lineNo: t.integer('line_no').primaryKey({autoIncrement: true}),
 		documentType: t
 			.text('document_type', {
 				enum: documentType,
@@ -275,10 +275,6 @@ export const salesLines = sqliteTable(
 	}),
 	(t) => [
 		index('sales_lines_document_id_idx').on(t.documentNo),
-		primaryKey({
-			columns: [t.lineNo, t.documentType, t.documentNo],
-			name: 'sales_lines_pkey',
-		}),
 		index('sales_lines_item_id_idx').on(t.itemNo),
 		index('sales_lines_created_at_idx').on(t.createdAt),
 		index('sales_lines_updated_at_idx').on(t.updatedAt),

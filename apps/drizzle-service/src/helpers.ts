@@ -251,7 +251,7 @@ export function effectErrorHandler(
 	return Effect.fail(cleanError)
 }
 
-export function executeHooks<_T, TBefore, TAfter = TBefore>(
+export function executeHooks<TBefore, TAfter = TBefore>(
 	hooks:
 		| {
 				beforeAction?: (data: TBefore) => Promise<void>

@@ -101,7 +101,6 @@ describe('PG Service: Bulk Mutation Operations', () => {
 
 		for (const id of idsToDelete) {
 			const deleted = await itemService.findOne(id)
-      console.log(deleted)
 			expect(deleted).not.toBeNull()
 			expect(deleted?.status).toBe('DISCONTINUED')
 		}

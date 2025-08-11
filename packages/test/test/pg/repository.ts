@@ -3,7 +3,7 @@ import { faker } from '@faker-js/faker'
 import { z } from 'zod/v4'
 import { db, schema, service } from './schema'
 
-export {schema}
+export { schema }
 export type SchemaKeys = keyof typeof schema
 
 export interface EntityTypes<T extends SchemaKeys> {
@@ -37,10 +37,76 @@ export const salesService = service(schema.salesHeaders, {
 			},
 		})
 	},
+	mockHeader: async (storeId: number) => {
+		const salesHeaderData = mockSaleHeader(storeId)
+		const [error, saleHeader] = await salesService.create(salesHeaderData, {
+			afterAction: async (document) => {
+				const itemsMock = Array.from({ length: 3 }, () => mockItem())
+				await itemService.bulkCreate(itemsMock, {
+					afterAction: async (items) => {
+						const salesLines = items.map((item) =>
+							mockSaleLine(
+								{
+									no: document.id,
+									type: document.documentType,
+								},
+								{
+									no: item.id,
+									type: item.type,
+									unitPrice: item.price,
+								},
+							),
+						)
+						await salesLinesService.bulkCreate(salesLines, {
+							afterAction: async (lines) => {
+								const amount = lines.reduce(
+									(acc, line) => acc + parseFloat(line.amount.toString()),
+									0,
+								)
+								const tax = lines.reduce(
+									(acc, line) => acc + parseFloat(line.tax.toString()),
+									0,
+								)
+								await salesService.update(
+									document.id,
+									{ amount, tax },
+									{
+										afterAction: async () => {
+											await itemEntryService.addInventory(
+												items.map((item) => item.id),
+												faker.number.int({ min: 1000, max: 5000 }),
+												storeId,
+											)
+										},
+									},
+								)
+							},
+						})
+					},
+				})
+			},
+		})
+		if (error) {
+			throw new Error(`Failed to create mock sale header: ${error.message}`)
+		}
+		const header = await salesService.query.findFirst({
+			where({ id }, { eq }) {
+				return eq(id, saleHeader.id)
+			},
+			with: {
+				salesLines: true,
+			}
+		})
+		if (!header) {
+			throw new Error(`Failed to find created mock sale header`)
+		}
+		return header
+	},
 })
 
 export const salesLinesService = service(schema.salesLines, {
 	id: 'lineNo',
+	query: db.query.salesLines,
 })
 
 export const userService = service(schema.users, {
@@ -53,36 +119,52 @@ export const userService = service(schema.users, {
 })
 export const itemEntryService = service(schema.itemEntry, {
 	id: 'entryNo',
-	addInventory: async (item: string | string[], quantity: number, store: number) => {
+	addInventory: async (
+		item: string | string[],
+		quantity: number,
+		store: number,
+	) => {
 		const isArray = Array.isArray(item)
-		return isArray ? await itemEntryService.bulkCreate(item.map((itemId) => ({
-			itemId,
-			type: 'POSITIVE_ADJ',
-			storeId: store,
-			quantity,
-			description: `Added ${quantity} of item ${itemId} to store ${store}`,
-		}))) : await itemEntryService.create({
-			itemId: item,
-			type: 'POSITIVE_ADJ',
-			storeId: store,
-			quantity,
-			description: `Added ${quantity} of item ${item} to store ${store}`,
-		})
+		return isArray
+			? await itemEntryService.bulkCreate(
+					item.map((itemId) => ({
+						itemId,
+						type: 'POSITIVE_ADJ',
+						storeId: store,
+						quantity,
+						description: `Added ${quantity} of item ${itemId} to store ${store}`,
+					})),
+				)
+			: await itemEntryService.create({
+					itemId: item,
+					type: 'POSITIVE_ADJ',
+					storeId: store,
+					quantity,
+					description: `Added ${quantity} of item ${item} to store ${store}`,
+				})
 	},
-	removeInventory: async (item: string | string[], quantity: number, store: number) => {
+	removeInventory: async (
+		item: string | string[],
+		quantity: number,
+		store: number,
+	) => {
 		const isArray = Array.isArray(item)
-		return isArray ? await itemEntryService.bulkCreate(item.map((itemId) => ({
-			itemId,
-			type: 'NEGATIVE_ADJ',
-			storeId: store,
-			quantity,
-		}))) : await itemEntryService.create({
-			itemId: item,
-			type: 'NEGATIVE_ADJ',
-			storeId: store,
-			quantity,
-			description: `Removed ${quantity} of item ${item} from store ${store}`,
-		})
+		return isArray
+			? await itemEntryService.bulkCreate(
+					item.map((itemId) => ({
+						itemId,
+						type: 'NEGATIVE_ADJ',
+						storeId: store,
+						quantity,
+					})),
+				)
+			: await itemEntryService.create({
+					itemId: item,
+					type: 'NEGATIVE_ADJ',
+					storeId: store,
+					quantity,
+					description: `Removed ${quantity} of item ${item} from store ${store}`,
+				})
 	},
 	getInventory: async (item: string, store?: number) => {
 		return await itemEntryService.findBy(
@@ -210,7 +292,7 @@ export const storeService = service(schema.stores, {
 	id: 'id',
 	soft: {
 		field: 'deletedAt',
-		deletedValue: 'NOT_NULL'
+		deletedValue: 'NOT_NULL',
 	},
 })
 

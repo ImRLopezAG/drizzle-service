@@ -3,7 +3,7 @@ import type {
 	Column,
 	ExtractTableRelationsFromSchema,
 	SQL,
-	Table
+	Table,
 } from 'drizzle-orm'
 import type { PgDatabase, PgSelect } from 'drizzle-orm/pg-core'
 import type { BaseSQLiteDatabase, SQLiteSelect } from 'drizzle-orm/sqlite-core'
@@ -20,7 +20,7 @@ export type PostgresDb = PgDatabase<any, any, any>
 export type QBuilders = SQLiteSelect | PgSelect
 export type BaseDatabase = SQLiteDb | PostgresDb
 
-export type Handler<T> = Promise<[ServiceError, null] | [null, T]>// Error types remain the same...
+export type Handler<T> = Promise<[ServiceError, null] | [null, T]> // Error types remain the same...
 export class DatabaseError extends Error {
 	readonly _tag = 'DatabaseError'
 	constructor(
@@ -348,7 +348,11 @@ export type IdType<
 		? IdType // Use the natural 'id' field type
 		: never
 
-// Fixed interface signatures to handle undefined options properly
+type DeleteType = {
+	success: boolean
+	message?: string
+}
+
 export interface MutationOperations<
 	T extends BaseEntity,
 	TOpts extends ServiceOptions<T> | undefined = undefined,
@@ -357,31 +361,46 @@ export interface MutationOperations<
 		data: T['$inferInsert'],
 		hooks?: ServiceHooks<T['$inferInsert'], T['$inferSelect']>,
 	) => Handler<T['$inferSelect']>
-	update: (
-		id: IdType<T, TOpts>,
-		data: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>,
-		hooks?: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect']>,
-	) => Handler<T['$inferSelect']>
+	update: {
+		(
+			id: IdType<T, TOpts>,
+			data: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>,
+			hooks: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect'][]> & {
+				custom: SQL
+			},
+		): Handler<T['$inferSelect'][]>
+		(
+			id: IdType<T, TOpts>,
+			data: Partial<Omit<T['$inferInsert'], 'createdAt' | 'id'>>,
+			hooks?: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect']>,
+		): Handler<T['$inferSelect']>
+	}
 	findOrCreate: (
 		data: T['$inferInsert'],
 		hooks?: ServiceHooks<T['$inferInsert'], T['$inferSelect']>,
 	) => Handler<T['$inferSelect']>
 	upsert: (
 		data: T['$inferInsert'],
-		hooks?: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect']>,
+		hooks?: ServiceHooks<T['$inferInsert'], T['$inferSelect']>,
 	) => Handler<T['$inferSelect']>
-	delete: (
-		id: IdType<T, TOpts>,
-		hooks?: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect']>,
-	) => Promise<{ readonly success: boolean; readonly message?: string }>
+	delete: {
+		(
+			id: IdType<T, TOpts>,
+			hooks?: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect'][]>,
+		): Promise<DeleteType>,
+		(
+			id: IdType<T, TOpts>,
+			hooks?: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect']>,
+		): Promise<DeleteType>
+	}
 	hardDelete: (
 		id: IdType<T, TOpts>,
-		hooks?: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect']>,
-	) => Promise<{ readonly success: boolean; readonly message?: string }>
+		hooks?: ExtendedServiceHooks<T['$inferSelect']>,
+	) => Promise<DeleteType>
 	restore: (
 		id: IdType<T, TOpts>,
-		hooks?: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect']>,
-	) => Promise<{ readonly success: boolean; readonly message?: string }>
+		hooks?: ExtendedServiceHooks<T['$inferSelect']>,
+	) => Promise<DeleteType>
 }
 
 export interface QueryOperations<
