@@ -23,7 +23,8 @@ const productService = service(products, { // [!code highlight]
     field: 'status', // [!code word:status]
     deletedValue: 'discontinued',
     notDeletedValue: 'active'
-  }
+  },
+  query: db.query.products, // [!code highlight]
 })
 
 // Get all active products with pagination
@@ -39,7 +40,7 @@ const featuredElectronics = await productService.findBy({
   categoryId: 'electronics',
   featured: true, // [!code highlight]
   inStock: true, // [!code highlight]
-  price: { gte: 50, lte: 500 }
+  price: { $gte: 50, $lte: 500 }
 })
 
 // Get products by specific SKU pattern
@@ -49,7 +50,7 @@ const bluetoothProducts = await productService.findBy({
 
 // Find products in multiple categories
 const techProducts = await productService.findBy({
-  categoryId: { in: ['electronics', 'computers', 'mobile'] } // [!code highlight]
+  categoryId: { $in: ['electronics', 'computers', 'mobile'] } // [!code highlight]
 })
 ```
 
@@ -65,8 +66,6 @@ if (product) {
   console.log('Product not found')
 }
 
-// Get product by unique SKU
-const productBySku = await productService.findByField('sku', 'WBH-001') // [!code word:findByField]
 
 // Get products by brand with sorting
 const appleProducts = await productService.findBy(
@@ -79,10 +78,10 @@ const appleProducts = await productService.findBy(
 
 // Advanced filtering with multiple conditions
 const premiumProductsInStock = await productService.findBy({
-  price: { gte: 1000 }, // [!code]
+  price: { $gte: 1000 }, // [!code]
   inStock: true, // [!code]
-  rating: { gte: 4.5 }, // [!code]
-  categoryId: { in: ['electronics', 'computers'] } // [!code]
+  rating: { $gte: 4.5 }, // [!code]
+  categoryId: { $in: ['electronics', 'computers'] } // [!code]
 })
 ```
 
@@ -122,17 +121,17 @@ const engineeringManagers = await userService.findBy({
 // Get recently registered users (last 7 days)
 const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 const newUsers = await userService.findBy({
-  createdAt: { gte: weekAgo } // [!code highlight]
+  createdAt: { $gte: weekAgo } // [!code highlight]
 })
 
 // Find users by email domain
 const companyUsers = await userService.findBy({
-  email: { ilike: '%@company.com' } // [!code word:ilike]
+  email: { $ilike: '%@company.com' } // [!code word:ilike]
 })
 
 // Get users with specific permissions
 const adminUsers = await userService.findBy({
-  permissions: { contains: ['admin', 'user_management'] } // [!code highlight]
+  permissions: { $in: ['admin', 'user_management'] } // [!code highlight]
 })
 ```
 
@@ -141,30 +140,30 @@ const adminUsers = await userService.findBy({
 ```typescript title="Advanced User Search and Filtering"
 // Search users by partial name or email
 const searchResults = await userService.findBy({
-  or: [ // [!code highlight]
-    { name: { ilike: '%john%' } }, // [!code highlight]
-    { email: { ilike: '%john%' } } // [!code highlight]
-  ] // [!code highlight]
+  where: or( // [!code highlight]
+    schema.users.name, ilike('%john%'),
+    schema.users.email, ilike('%john%')
+  )
 })
 
 // Get users by multiple criteria
 const seniorDevelopers = await userService.findBy({
-  role: { in: ['senior_developer', 'lead_developer'] }, // [!code word:in]
-  experience: { gte: 5 }, // [!code word:gte]
+  role: { $in: ['senior_developer', 'lead_developer'] }, // [!code word:in]
+  experience: { $gte: 5 }, // [!code word:gte]
   status: 'active'
 })
 
 // Find inactive users for cleanup
 const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
 const inactiveUsers = await userService.findBy({
-  lastLoginAt: { lt: threeMonthsAgo }, // [!code]
+  lastLoginAt: { $lt: threeMonthsAgo }, // [!code]
   status: 'active' // [!code]
 })
 
 // Get users by location and preferences
 const remoteUsers = await userService.findBy({
   workLocation: 'remote', // [!code highlight]
-  timezone: { in: ['UTC-8', 'UTC-7', 'UTC-6'] } // [!code highlight]
+  timezone: { $in: ['UTC-8', 'UTC-7', 'UTC-6'] } // [!code highlight]
 })
 ```
 
@@ -174,9 +173,10 @@ const remoteUsers = await userService.findBy({
 
 ```typescript title="Content Management and Publishing"
 import { articles, authors, categories } from './schema'
+import {service} from './db'
 
 // Article service with soft delete for draft/published states
-const articleService = drizzleService(db)(articles, {
+const articleService = service(articles, {
   soft: {
     field: 'status',
     deletedValue: 'archived',
@@ -184,7 +184,7 @@ const articleService = drizzleService(db)(articles, {
   }
 })
 
-const authorService = drizzleService(db)(authors)
+const authorService = service(authors)
 
 // Get published articles with pagination
 const publishedArticles = await articleService.find({
@@ -204,19 +204,14 @@ const featuredArticles = await articleService.findBy({
 // Search articles by category and tags
 const techArticles = await articleService.findBy({
   categoryId: 'technology',
-  tags: { contains: ['javascript', 'typescript'] }
+  tags: { $in: ['javascript', 'typescript'] }
 })
 
-// Get articles by specific author
-const authorArticles = await articleService.findByField(
-  'authorId',
-  'author-123'
-)
 
 // Get recent articles (last 30 days)
 const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
 const recentArticles = await articleService.findBy({
-  publishedAt: { gte: thirtyDaysAgo }
+  publishedAt: { $gte: thirtyDaysAgo }
 })
 ```
 
@@ -225,7 +220,7 @@ const recentArticles = await articleService.findBy({
 ```typescript title="Content Performance Analytics"
 // Get most viewed articles
 const popularArticles = await articleService.findBy({
-  viewCount: { gte: 1000 }
+  viewCount: { $gte: 1000 }
 }, {
   orderBy: { viewCount: 'desc' },
   limit: 10
@@ -233,24 +228,24 @@ const popularArticles = await articleService.findBy({
 
 // Get articles with high engagement
 const engagingArticles = await articleService.findBy({
-  commentCount: { gte: 10 },
-  likeCount: { gte: 50 }
+  commentCount: { $gte: 10 },
+  likeCount: { $gte: 50 }
 })
 
 // Find articles needing review (old unpublished drafts)
 const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)
 const staleDrafts = await articleService.findBy({
   status: 'draft',
-  updatedAt: { lt: sixMonthsAgo }
+  updatedAt: { $lt: sixMonthsAgo }
 })
 
 // Get articles by reading time for content planning
 const quickReads = await articleService.findBy({
-  readingTimeMinutes: { lte: 5 }
+  readingTimeMinutes: { $lte: 5 }
 })
 
 const longFormContent = await articleService.findBy({
-  readingTimeMinutes: { gte: 15 }
+  readingTimeMinutes: { $gte: 15 }
 })
 ```
 
@@ -260,13 +255,30 @@ const longFormContent = await articleService.findBy({
 
 ```typescript title="Order Management and Financial Analytics"
 import { orders, orderItems, customers } from './schema'
+import { service } from './db'
 
 // Order service with soft delete for canceled orders
-const orderService = drizzleService(db)(orders, {
+const orderService = service(orders, {
   soft: {
     field: 'status',
     deletedValue: 'canceled',
     notDeletedValue: 'active'
+  },
+  getRepeatCustomers: async ()  => {
+    // This would typically involve a more complex query with grouping
+    // For demonstration, we'll show the basic pattern
+    const allOrders = await orderService.find()
+    
+    const customerOrderCounts = allOrders.reduce((acc, order) => {
+      acc[order.customerId] = (acc[order.customerId] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    
+    const repeatCustomers = Object.entries(customerOrderCounts)
+      .filter(([, count]) => count > 1)
+      .map(([customerId]) => customerId)
+    
+    return repeatCustomers
   }
 })
 
@@ -278,8 +290,8 @@ const recentOrders = await orderService.find({
 
 // Get high-value orders
 const highValueOrders = await orderService.findBy({
-  total: { gte: 1000 },
-  status: { in: ['pending', 'processing', 'shipped'] }
+  total: { $gte: 1000 },
+  status: { $in: ['pending', 'processing', 'shipped'] }
 })
 
 // Get orders by date range
@@ -304,29 +316,6 @@ const pendingOrders = await orderService.findBy({
 ### Customer Order History
 
 ```typescript title="Customer Order History and Behavior"
-// Get orders for specific customer
-const customerOrders = await orderService.findByField(
-  'customerId',
-  'customer-456'
-)
-
-// Get repeat customers (multiple orders)
-async function getRepeatCustomers() {
-  // This would typically involve a more complex query with grouping
-  // For demonstration, we'll show the basic pattern
-  const allOrders = await orderService.find()
-  
-  const customerOrderCounts = allOrders.reduce((acc, order) => {
-    acc[order.customerId] = (acc[order.customerId] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
-  
-  const repeatCustomers = Object.entries(customerOrderCounts)
-    .filter(([, count]) => count > 1)
-    .map(([customerId]) => customerId)
-  
-  return repeatCustomers
-}
 
 // Get orders by shipping location
 const californiaOrders = await orderService.findBy({
@@ -336,8 +325,9 @@ const californiaOrders = await orderService.findBy({
 // Get urgent orders (express shipping)
 const expressOrders = await orderService.findBy({
   shippingMethod: 'express',
-  status: { in: ['pending', 'processing'] }
+  status: { $in: ['pending', 'processing'] }
 })
+
 ```
 
 ## Support and Ticketing System
@@ -359,16 +349,11 @@ const ticketService = drizzleService(db)(supportTickets, {
 // Get open tickets by priority
 const criticalTickets = await ticketService.findBy({
   priority: 'critical',
-  status: { in: ['open', 'in_progress'] }
+  status: { $in: ['open', 'in_progress'] }
 }, {
   orderBy: { createdAt: 'asc' } // Oldest first for critical issues
 })
 
-// Get tickets assigned to specific agent
-const agentTickets = await ticketService.findByField(
-  'assignedAgentId',
-  'agent-123'
-)
 
 // Get unassigned tickets
 const unassignedTickets = await ticketService.findBy({
@@ -379,14 +364,14 @@ const unassignedTickets = await ticketService.findBy({
 // Get overdue tickets
 const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
 const overdueTickets = await ticketService.findBy({
-  createdAt: { lt: twoDaysAgo },
-  status: { in: ['open', 'in_progress'] }
+  createdAt: { $t: twoDaysAgo },
+  status: { $in: ['open', 'in_progress'] }
 })
 
 // Get tickets by category
 const technicalIssues = await ticketService.findBy({
   category: 'technical',
-  status: { in: ['open', 'in_progress'] }
+  status: { $in: ['open', 'in_progress'] }
 })
 ```
 
@@ -401,8 +386,8 @@ const errorService = drizzleService(db)(errorLogs)
 
 // Get recent system errors
 const recentErrors = await errorService.findBy({
-  createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, // Last hour
-  severity: { in: ['error', 'critical'] }
+  createdAt: { $gte: new Date(Date.now() - 60 * 60 * 1000) }, // Last hour
+  severity: { $in: ['error', 'critical'] }
 }, {
   orderBy: { createdAt: 'desc' }
 })
@@ -410,13 +395,13 @@ const recentErrors = await errorService.findBy({
 // Get performance metrics for monitoring
 const slowQueries = await metricsService.findBy({
   metricType: 'query_duration',
-  value: { gte: 1000 } // Over 1 second
+  value: { $gte: 1000 } // Over 1 second
 })
 
 // Get system logs by service
 const apiLogs = await logService.findBy({
   service: 'api',
-  level: { in: ['warn', 'error'] }
+  level: { $in: ['warn', 'error'] }
 }, {
   orderBy: { timestamp: 'desc' },
   limit: 100
@@ -449,19 +434,19 @@ const midRangeProducts = await productService.findBy({
 
 // Text search patterns
 const searchQuery = 'wireless bluetooth'
-const searchResults = await productService.findBy({
-  or: [
-    { name: { ilike: `%${searchQuery}%` } },
-    { description: { ilike: `%${searchQuery}%` } },
-    { tags: { contains: searchQuery.split(' ') } }
-  ]
+const searchResults = await productService.find({
+  where: or(
+    eq(orders.name, like(`%${searchQuery}%`)),
+    eq(orders.description, like(`%${searchQuery}%`)),
+    inArray(orders.tags, searchQuery.split(' '))
+  )
 })
 
 // Date-based queries for analytics
 const lastQuarter = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
 const quarterlyOrders = await orderService.findBy({
-  createdAt: { gte: lastQuarter },
-  status: { ne: 'canceled' }
+  createdAt: { $te: lastQuarter },
+  status: { $neq: 'canceled' }
 }, {
   orderBy: { total: 'desc' }
 })
@@ -475,7 +460,7 @@ async function getPaginatedProducts(cursor?: string, limit = 20) {
   const conditions: any = { status: 'active' }
   
   if (cursor) {
-    conditions.id = { gt: cursor }
+    conditions.id = { $gt: cursor }
   }
   
   const products = await productService.findBy(conditions, {

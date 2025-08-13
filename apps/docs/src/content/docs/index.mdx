@@ -23,21 +23,21 @@ Drizzle Service is a high-level abstraction layer built on top of Drizzle ORM th
 <Cards>
   <Card 
     icon={<Database />}
-    href="/docs/queries" 
+    href="/queries/api-reference" 
     title="Query Operations"
   >
     Comprehensive query operations with advanced filtering, pagination, and relations support.
   </Card>
   <Card 
     icon={<Zap />}
-    href="/docs/mutations" 
+    href="/mutations/api-reference" 
     title="Mutation Operations"
   >
     Safe and efficient create, update, and delete operations with lifecycle hooks.
   </Card>
   <Card 
     icon={<Shield />}
-    href="/docs/bulk-operations" 
+    href="/bulk-operations/api-reference" 
     title="Bulk Operations"
   >
     High-performance bulk operations for processing large datasets efficiently.
@@ -84,6 +84,9 @@ const productService = service(products, { // [!code highlight]
     deletedValue: 'discontinued',
     notDeletedValue: 'active'
   }
+  itemsByCategory: async (categoryId: string) => {
+    return productService.findBy({ categoryId, inStock: true }, { orderBy: { updatedAt: 'desc' } })
+  }
 })
 
 // Category management service
@@ -92,7 +95,7 @@ const categoryService = service(categories) // [!code highlight]
 // Order processing service
 const orderService = service(orders, { // [!code highlight]
   soft: {
-    field: 'status', // [!code word:status]
+    field: 'status',
     deletedValue: 'canceled',
     notDeletedValue: 'pending'
   }
@@ -109,11 +112,12 @@ const featuredProducts = await productService.findBy({
   inStock: true // [!code highlight]
 })
 
-// Product search by category
-const electronicsProducts = await productService.findByField(
-  'categoryId', 
-  'electronics-category-id'
-)
+// Custom methods | Business Logic
+
+const itemsCategorized = await productService.itemsByCategory('ELECTRONICS') // [!code word:itemsByCategory]
+
+console.log('Items categorized under ELECTRONICS:', itemsCategorized)
+
 
 // Create new product
 const [error, newProduct] = await productService.create({ // [!code word:create]
@@ -149,6 +153,11 @@ const supplierProducts = [
 ]
 
 const [bulkError, importedProducts] = await productService.bulkCreate(supplierProducts) // [!code word:bulkCreate]
+if (bulkError) {
+  console.error('Bulk import failed:', bulkError.message)
+} else {
+  console.log('Imported products:', importedProducts.map(p => p.id))
+}
 ```
 
 ## Architecture
@@ -191,6 +200,11 @@ Specialized adapters for PostgreSQL and SQLite that handle database-specific opt
     override: {
       description: 'Function to override or extend default service methods',
       type: '(baseMethods: ServiceMethods<T>) => Partial<ServiceMethods<T>>',
+    },
+    '...CustomMethods': {
+      description: 'Custom methods specific to the service',
+      type: 'Record<string, (...args: any[]) => Promise<any>>',
+      default: '{}'
     }
   }}
 />

@@ -1,9 +1,7 @@
-import * as path from 'node:path'
-import { source } from '@/app/source'
-import { createCompiler } from '@fumadocs/mdx-remote'
-import { executeMdxSync } from '@fumadocs/mdx-remote/client'
 import type { PageTree } from 'fumadocs-core/server'
 import { getPageTreePeers } from 'fumadocs-core/server'
+import { toClientRenderer } from 'fumadocs-mdx/runtime/vite'
+import { Card, Cards } from 'fumadocs-ui/components/card'
 import { DocsLayout } from 'fumadocs-ui/layouts/docs'
 import {
 	DocsBody,
@@ -11,12 +9,27 @@ import {
 	DocsPage,
 	DocsTitle,
 } from 'fumadocs-ui/page'
+import { source } from '@/app/source'
+import { docs } from '../../../source.generated'
+import { getMDXComponents } from '../mdx-components'
 import type { Route } from './+types/page'
 
-import { getMDXComponents } from '@/app/mdx-components'
-import { Card, Cards } from 'fumadocs-ui/components/card'
+export async function loader({ params }: Route.LoaderArgs) {
+	const slugs = params['*']
+		?.toString()
+		.split('/')
+		.filter((v) => v.length > 0)
+	const page = source.getPage(slugs)
+	if (!page) throw new Response('Not found', { status: 404 })
 
-export function meta({ data }: Route.MetaArgs) {
+	return {
+		page,
+		path: page.path,
+		tree: source.pageTree,
+	}
+}
+
+export function meta({ loaderData: data }: Route.MetaArgs) {
 	const defaultMeta = [
 		{ title: 'Drizzle Service - Type-Safe Service Layer for Drizzle ORM' },
 		{
@@ -109,30 +122,38 @@ export function meta({ data }: Route.MetaArgs) {
 		},
 	]
 }
-const compiler = createCompiler({
-	development: false,
-})
 
-export async function loader({ params }: Route.LoaderArgs) {
-	const slugs = (params['*'] || '').split('/').filter((v) => v.length > 0)
-	const page = source.getPage(slugs)
-	if (!page) throw new Error('Not found')
-
-	const compiled = await compiler.compileFile({
-		path: path.resolve('content/docs', page.file.path),
-		value: page.data.content,
-	})
-
-	return {
-		page,
-		compiled: compiled.toString(),
-		tree: source.pageTree,
-	}
-}
+const renderer = toClientRenderer(
+	docs.doc,
+	({ toc, default: Mdx, frontmatter }) => {
+		return (
+			<DocsPage
+				toc={toc}
+				tableOfContent={{
+					style: 'clerk',
+				}}
+			>
+				<title>{frontmatter.title}</title>
+				<meta name='description' content={frontmatter.description} />
+				<DocsTitle>{frontmatter.title}</DocsTitle>
+				<DocsDescription>{frontmatter.description}</DocsDescription>
+				<DocsBody>
+					<Mdx
+						components={getMDXComponents({
+							DocsCategory: ({ url }: { url: string }) => {
+								return <DocsCategory url={url} />
+							},
+						})}
+					/>
+				</DocsBody>
+			</DocsPage>
+		)
+	},
+)
 
 export default function Page(props: Route.ComponentProps) {
-	const { page, compiled, tree } = props.loaderData
-	const { default: Mdx, toc } = executeMdxSync(compiled)
+	const { tree, path } = props.loaderData
+	const Content = renderer[path]
 
 	return (
 		<DocsLayout
@@ -141,24 +162,7 @@ export default function Page(props: Route.ComponentProps) {
 			}}
 			tree={tree as PageTree.Root}
 		>
-			<DocsPage
-				toc={toc}
-				tableOfContent={{
-					style: 'clerk',
-				}}
-			>
-				<DocsTitle>{page.data.title}</DocsTitle>
-				<DocsDescription>{page.data.description}</DocsDescription>
-				<DocsBody>
-					<Mdx
-						components={getMDXComponents({
-							DocsCategory: ({ url }) => {
-								return <DocsCategory url={url ?? page.url} />
-							},
-						})}
-					/>
-				</DocsBody>
-			</DocsPage>
+			<Content />
 		</DocsLayout>
 	)
 }

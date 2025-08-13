@@ -23,8 +23,8 @@ The Drizzle Service provides a comprehensive set of query operations that allow 
 |--------|-------------|
 | `find(opts?)` | Retrieve all records with optional filtering and pagination |
 | `findOne(id, opts?)` | Find a single record by its primary key |
+| `findFirst(opts?)` | Find the first record matching the criteria |
 | `findBy(criteria, opts?)` | Find records matching specific criteria |
-| `findByField(field, value, opts?)` | Find records by a single field value |
 | `count(criteria?)` | Count records matching optional criteria |
 
 ### Advanced Query Operations
@@ -33,7 +33,7 @@ The Drizzle Service provides a comprehensive set of query operations that allow 
 |--------|-------------|
 | `findWithCursor(opts)` | Cursor-based pagination for large datasets |
 | `findByMatching(criteria, opts?)` | Advanced pattern matching with multiple criteria |
-| `filter(criteria, opts?)` | Complex filtering with Business Central style expression-based queries |
+| `search(criteria, opts?)` | Complex filtering with Business Central style expression-based queries |
 
 ## Query Options
 
@@ -349,7 +349,7 @@ console.log(nonExistent) // null
 
 // With relations
 const todoWithRelations = await todosService.findOne('todo-123', {
-  relations: [{ type: 'left', table: user, sql: eq(todos.userId, user.id) }]
+  relations: [{ type: 'left', table: user, on: eq(todos.userId, user.id) }]
 })
 
 console.log('Todo with user relation:', todoWithRelations) // [{todos, users}, ...{todos, users}, ...]
@@ -437,50 +437,6 @@ const todos = await todosService.findByMatching({
 todos.forEach(todo => {
   const reason = todo.status === 'done' ? 'completed' : 'high priority'
   console.log(`${todo.title} - Found because: ${reason}`)
-})
-```
-
-## findByField()
-
-Finds entities by a specific field and its value.
-
-### Parameters
-
-<TypeTable
-  type={{
-    field: {
-      description: "The field name to search by",
-      type: "keyof T['$inferSelect']",
-      required: true
-    },
-    value: {
-      description: "The value to match against the specified field",
-      type: "T['$inferSelect'][K]",
-      required: true
-    },
-    opts: {
-      description: "Optional query options for filtering, sorting, and including relations",
-      type: "QueryOpts<T, TResult, TRels>",
-      required: false
-    }
-  }}
-/>
-
-### Returns
-
-Returns `Promise<TResult>` where `TResult` is based on whether relations are included.
-
-### Example
-
-```typescript
-// Find all completed todos
-const doneTodos = await todosService.findByField('status', 'done')
-console.log(`Found ${doneTodos.length} completed todos`)
-
-// Find todos by priority
-const highPriorityTodos = await todosService.findByField('priority', 'high')
-highPriorityTodos.forEach(todo => {
-  console.log(`High priority: ${todo.title}`)
 })
 ```
 

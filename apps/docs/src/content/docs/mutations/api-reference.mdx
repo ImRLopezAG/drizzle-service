@@ -25,6 +25,8 @@ The Drizzle Service provides robust mutation operations that allow you to create
 | `delete(id, hooks?)` | Soft delete a record (if configured) or hard delete |
 | `hardDelete(id, hooks?)` | Permanently delete a record from the database |
 | `restore(id, hooks?)` | Restore a soft-deleted record |
+| `findOrCreate(data, hooks?)` | Find an existing record or create a new one |
+| `upsert(data, hooks?)` | Update an existing record or create a new one if it doesn't exist |
 
 
 ### Return Types
@@ -60,6 +62,35 @@ Interface for lifecycle hooks that can be executed during mutation operations.
   }}
 />
 
+## ExtendedServiceHooks&lt;T&gt;
+
+Interface for lifecycle hooks that can be executed during mutation operations and query operations to override some behavior.
+
+<TypeTable
+  type={{
+    beforeAction: {
+      description: "Optional hook executed before the mutation operation",
+      type: "(data: T['$inferSelect']) => Promise<void>",
+      required: false
+    },
+    afterAction: {
+      description: "Optional hook executed after the mutation operation",
+      type: "(data: T['$inferSelect']) => Promise<void>",
+      required: false
+    },
+    onError: {
+      description: "Optional hook executed when an error occurs",
+      type: "(error: Error) => Promise<void>",
+      required: false
+    },
+    custom: {
+      description: "Optional custom hook for additional logic",
+      type: "SQL",
+      required: false
+    }
+  }}
+/>
+
 ### Hook Example
 
 ```typescript
@@ -76,6 +107,24 @@ const hooks = {
 }
 
 const [error, todo] = await todosService.create(todoData, hooks)
+```
+### Extended Hook Example
+
+```typescript
+const hooks = {
+  beforeAction: async (data) => {
+    console.log('About to create:', data)
+  },
+  afterAction: async (data) => {
+    console.log('Created successfully:', data.id)
+  },
+  custom: eq(schema.todos.title, 'Complete documentation'),
+  onError: async (error) => {
+    console.error('Operation failed:', error.message)
+  }
+}
+
+const [error, todo] = await todosService.update(1, todoData, hooks)
 ```
 
 ### Soft Delete Configuration
@@ -178,7 +227,7 @@ Updates an existing entity in the database.
     },
     hooks: {
       description: "Optional service hooks to execute during update",
-      type: "ServiceHooks<T>",
+      type: "ExtendedServiceHooks<T>",
       required: false
     }
   }}
@@ -220,7 +269,7 @@ Performs a soft delete on an entity (marks as deleted without removing from data
     },
     hooks: {
       description: "Optional service hooks to execute during deletion",
-      type: "ServiceHooks<T>",
+      type: "ExtendedServiceHooks<T>",
       required: false
     }
   }}
@@ -344,3 +393,99 @@ if (restoreResult.success) {
   console.error('Restore failed')
 }
 ```
+
+## upsert()
+
+This method attempts to update an existing record. If the record does not exist, it creates a new one.
+
+### Parameters
+
+<TypeTable
+  type={{
+    data: {
+      description: "The data to update or create",
+      type: "T['$inferSelect']",
+      required: true
+    },
+    hooks: {
+      description: "Optional service hooks to execute during upsert",
+      type: "ExtendedServiceHooks<T>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns a promise that resolves to an object with the created or updated record:
+
+```typescript
+Promise<T['$inferSelect']>
+```
+
+### Example
+
+```typescript
+const [error, todo] = await todosService.upsert({
+  id: todoId,
+  title: 'Updated task title',
+  status: 'in-progress',
+  priority: 'low'
+})
+
+if (error) {
+  console.error('Upsert failed:', error.message)
+} else {
+  console.log('Upserted todo:', todo.title)
+  console.log('New status:', todo.status)
+}
+```
+
+## findOrCreate()
+
+This method attempts to find an existing record that matches the provided data. If no matching record is found, it creates a new one.
+
+### Parameters
+
+<TypeTable
+  type={{
+    data: {
+      description: "The data to find or create",
+      type: "T['$inferSelect']",
+      required: true
+    },
+    hooks: {
+      description: "Optional service hooks to execute during find or create",
+      type: "ExtendedServiceHooks<T>",
+      required: false
+    }
+  }}
+/>
+
+### Returns
+
+Returns a promise that resolves to an object with the found or created record:
+
+```typescript
+Promise<T['$inferSelect']>
+```
+
+### Example
+
+```typescript
+const [error, todo] = await todosService.findOrCreate({
+  where: { id: todoId },
+  defaults: {
+    title: 'New task',
+    status: 'pending',
+    priority: 'medium'
+  }
+})
+
+if (error) {
+  console.error('Find or create failed:', error.message)
+} else {
+  console.log('Found or created todo:', todo.title)
+}
+```
+

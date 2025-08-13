@@ -694,3 +694,97 @@ const updateTicketStatus = async (
   return { error, ticket: updatedTicket }
 }
 ```
+
+### Sales Creation 
+```ts title="Sales Order Creation and Management"
+import {schema, service} from './db'
+
+export const salesService = service(schema.salesHeaders, {
+	soft: {
+		field: 'status',
+		deletedValue: 'CANCELED',
+		notDeletedValue: 'DRAFT',
+	},
+	query: db.query.salesHeaders,
+	getSalesWithLines: async () => {
+		return await salesService.db.query.salesHeaders.findMany({
+			with: {
+				salesLines: true,
+			},
+		})
+	},
+	salesHeaderDocument: async (salesHeader: SalesHeader, items: Item[]) => {
+		const [error, header] = await salesService.create(salesHeader, {
+			afterAction: async (document) => {
+				const preparedItems = await  itemsService.adjustInventory(items, document)
+				await itemService.bulkCreate(preparedItems, {
+					afterAction: async (items) => {
+						const salesLines = await salesLinesService.prepareLines(items)
+						await salesLinesService.bulkCreate(salesLines, {
+							afterAction: async (lines) => {
+								const {amount, tax} = await salesLinesService.calculateTotals(lines)
+								await salesService.update(
+									document.id,
+									{ amount, tax },
+									{
+										afterAction: async (lines) => {
+											await itemEntryService.handleInventoryUpdate(lines)
+										},
+									},
+								)
+							},
+						})
+					},
+				})
+			},
+		})
+
+    if (error) {
+      console.error('Failed to create sales header:', error.message)
+      return { success: false, error: error.message }
+    }
+
+    return { success: true, header }
+  }
+})
+
+
+// Updating Discounts
+
+const header = await salesService.salesHeaderDocument({
+  customerId: 'customer-123',
+  status: 'DRAFT',
+  currency: 'USD',
+  shippingAddress: {
+    street: '123 Main St',
+    city: 'Anytown',
+    state: 'CA',
+    zip: '12345',
+    country: 'USA'
+  },
+  discount: {
+    type: 'PERCENTAGE',
+    value: 10, // 10% discount
+    description: 'Early bird discount'
+  }
+}, [
+  { itemId: 'item-456', quantity: 2, price: 100 },
+  { itemId: 'item-457', quantity: 2, price: 100 },
+  { itemId: 'item-458', quantity: 2, price: 100 },
+  { itemId: 'item-459', quantity: 2, price: 100 },
+  { itemId: 'item-460', quantity: 2, price: 100 },
+  { itemId: 'item-461', quantity: 2, price: 100 },
+  { itemId: 'item-462', quantity: 2, price: 100 },
+])
+
+await salesLines.update(0, {
+  discount: {
+    type: 'PERCENTAGE',
+    value: 10,
+    description: 'Early bird discount'
+  }
+}, {
+  custom: custom: eq(salesLinesService.entity.documentNo, header.id)
+})
+
+```
