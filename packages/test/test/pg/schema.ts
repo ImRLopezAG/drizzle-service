@@ -75,6 +75,8 @@ export const stores = pgTable('stores', (t) => ({
 	deletedAt: t.timestamp('deleted_at'),
 }))
 
+
+
 export const users = pgTable('users', (t) => ({
 	id: t.serial().primaryKey(),
 	email: t.text().notNull().unique(),

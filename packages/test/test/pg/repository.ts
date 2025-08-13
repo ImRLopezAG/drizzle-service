@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { faker } from '@faker-js/faker'
 import { z } from 'zod/v4'
 import { db, schema, service } from './schema'
-
 export { schema }
 export type SchemaKeys = keyof typeof schema
 
@@ -101,7 +100,7 @@ export const salesService = service(schema.salesHeaders, {
 			throw new Error(`Failed to find created mock sale header`)
 		}
 		return header
-	},
+	}
 })
 
 export const salesLinesService = service(schema.salesLines, {

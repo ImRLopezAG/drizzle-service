@@ -110,7 +110,7 @@ describe('SQLITE Service: Query Operations (Advanced)', () => {
 
 	it('should find with custom query', async () => {
 		const sales = await salesService.find({
-			custom: and(
+			where: and(
 				eq(schema.salesHeaders.storeId, setup.storesId[0] ?? 1),
 				or(
 					eq(schema.salesHeaders.status, 'COMPLETED'),

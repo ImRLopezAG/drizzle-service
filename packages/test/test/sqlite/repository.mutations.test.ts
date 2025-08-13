@@ -468,7 +468,7 @@ describe('SQLITE Service: Mutation Operations', () => {
 		const store = await setupCreations.stores()
 		const salesHeader = await salesService.mockHeader(store.id)
 
-		const [error, data] = await salesLinesService.update(
+		const [error] = await salesLinesService.update(
 			1,
 			{
 				description: 'Updated description',
@@ -477,8 +477,6 @@ describe('SQLITE Service: Mutation Operations', () => {
 				custom: eq(salesLinesService.entity.documentNo, salesHeader.id),
 			},
 		)
-
-		console.log({ error, data })
 
 		expect(error).toBeNull()
 

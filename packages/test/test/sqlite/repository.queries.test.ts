@@ -225,9 +225,7 @@ describe('SQLITE Service: Query Operations (Basic)', () => {
 		expect(itemsWithPattern.length).toBeGreaterThan(0)
 
 		// All returned items should have names containing the pattern
-		for (const item of itemsWithPattern) {
-			expect(item.name).toContain(searchPattern)
-		}
+		expect(itemsWithPattern.every((item) => item.name.includes(searchPattern))).toBe(true)
 	})
 
 	it('should filter records with multiple criteria', async () => {
@@ -240,10 +238,7 @@ describe('SQLITE Service: Query Operations (Basic)', () => {
 		expect(filteredItems).toBeInstanceOf(Array)
 
 		// All returned items should match all criteria
-		for (const item of filteredItems) {
-			expect(item.status).toBe('ACTIVE')
-			expect(item.type).toBe('ITEM')
-		}
+		expect(filteredItems.every((item) => item.status === 'ACTIVE' && item.type === 'ITEM')).toBe(true)
 	})
 
 	it('should search records with no results', async () => {

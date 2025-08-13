@@ -8,6 +8,7 @@ import type {
 	Service,
 	ServiceHooks,
 	ServiceMethods,
+	DeleteType
 } from 'drizzle-service/builder/types.d.ts'
 import { describe, expectTypeOf, it } from 'vitest'
 import {
@@ -263,22 +264,22 @@ describe('PostgreSQL Service Types - Complex Schema', () => {
 
 			// Test return types
 			expectTypeOf(itemService.update).returns.toEqualTypeOf<
-				Handler<ItemSelect>
+				Handler<ItemSelect[]> | Handler<ItemSelect>
 			>()
 			expectTypeOf(userService.update).returns.toEqualTypeOf<
-				Handler<UserSelect>
+				Handler<UserSelect[]> | Handler<UserSelect>
 			>()
 			expectTypeOf(storeService.update).returns.toEqualTypeOf<
-				Handler<StoreSelect>
+				Handler<StoreSelect[]> | Handler<StoreSelect>
 			>()
 			expectTypeOf(salesService.update).returns.toEqualTypeOf<
-				Handler<SalesHeaderSelect>
+				Handler<SalesHeaderSelect[]> | Handler<SalesHeaderSelect>
 			>()
 			expectTypeOf(salesLinesService.update).returns.toEqualTypeOf<
-				Handler<SalesLineSelect>
+				Handler<SalesLineSelect[]> | Handler<SalesLineSelect>
 			>()
 			expectTypeOf(itemEntryService.update).returns.toEqualTypeOf<
-				Handler<ItemEntrySelect>
+				Handler<ItemEntrySelect[]> | Handler<ItemEntrySelect>
 			>()
 		})
 
@@ -302,22 +303,22 @@ describe('PostgreSQL Service Types - Complex Schema', () => {
 
 			// Test return types
 			expectTypeOf(itemService.delete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 			expectTypeOf(userService.delete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 			expectTypeOf(storeService.delete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 			expectTypeOf(salesService.delete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 			expectTypeOf(salesLinesService.delete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 			expectTypeOf(itemEntryService.delete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 		})
 
@@ -343,22 +344,22 @@ describe('PostgreSQL Service Types - Complex Schema', () => {
 
 			// Test return types
 			expectTypeOf(itemService.hardDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 			expectTypeOf(userService.hardDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 			expectTypeOf(storeService.hardDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 			expectTypeOf(salesService.hardDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 			expectTypeOf(salesLinesService.hardDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 			expectTypeOf(itemEntryService.hardDelete).returns.toEqualTypeOf<
-				Promise<{ readonly success: boolean; readonly message?: string }>
+				Promise<DeleteType>
 			>()
 		})
 	})
@@ -518,7 +519,7 @@ describe('PostgreSQL Service Types - Complex Schema', () => {
 			expectTypeOf(itemService.bulkDelete).returns.toEqualTypeOf<
 				Promise<
 					BulkOperationResult<
-						{ readonly success: boolean; readonly message?: string },
+						DeleteType,
 						ItemEntity
 					>
 				>
@@ -526,7 +527,7 @@ describe('PostgreSQL Service Types - Complex Schema', () => {
 			expectTypeOf(userService.bulkDelete).returns.toEqualTypeOf<
 				Promise<
 					BulkOperationResult<
-						{ readonly success: boolean; readonly message?: string },
+						DeleteType,
 						UserEntity
 					>
 				>
@@ -563,7 +564,7 @@ describe('PostgreSQL Service Types - Complex Schema', () => {
 			expectTypeOf(itemService.bulkHardDelete).returns.toEqualTypeOf<
 				Promise<
 					BulkOperationResult<
-						{ readonly success: boolean; readonly message?: string },
+						DeleteType,
 						ItemEntity
 					>
 				>
@@ -571,7 +572,7 @@ describe('PostgreSQL Service Types - Complex Schema', () => {
 			expectTypeOf(userService.bulkHardDelete).returns.toEqualTypeOf<
 				Promise<
 					BulkOperationResult<
-						{ readonly success: boolean; readonly message?: string },
+						DeleteType,
 						UserEntity
 					>
 				>

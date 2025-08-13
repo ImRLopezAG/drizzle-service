@@ -67,6 +67,18 @@ export function createFilters<T extends BaseEntity, Db extends BaseDatabase>({
 	const lower = (
 		col: Column<T['$inferSelect'][keyof T['$inferSelect']]>,
 	): SQLWrapper => sql`lower(${col})`
+	const contains = (
+		col: Column<T['$inferSelect'][keyof T['$inferSelect']]>,
+		value: string,
+	): SQLWrapper => like(col, `%${value}%`)
+	const startsWith = (
+		col: Column<T['$inferSelect'][keyof T['$inferSelect']]>,
+		value: string,
+	): SQLWrapper => like(col, `${value}%`)
+	const endsWith = (
+		col: Column<T['$inferSelect'][keyof T['$inferSelect']]>,
+		value: string,
+	): SQLWrapper => like(col, `%${value}`)
 	function withPagination<Q extends QBuilders, TResult>(
 		q: Q,
 		options?: QueryOpts<T, TResult>,
@@ -138,7 +150,7 @@ export function createFilters<T extends BaseEntity, Db extends BaseDatabase>({
 
 	function withCustom<Q extends QBuilders, TResult>(
 		q: Q,
-		custom?: QueryOpts<T, TResult>['custom'],
+		custom?: QueryOpts<T, TResult>['where'],
 	): Q {
 		if (!custom) return q
 
@@ -201,8 +213,8 @@ export function createFilters<T extends BaseEntity, Db extends BaseDatabase>({
 			query = withCursor(query, opts.cursor)
 		}
 
-		if (opts.custom) {
-			query = withCustom(query, opts.custom)
+		if (opts.where) {
+			query = withCustom(query, opts.where)
 		}
 
 		return query
@@ -332,7 +344,7 @@ export function createFilters<T extends BaseEntity, Db extends BaseDatabase>({
 			const column = table[key as keyof BaseEntity] as Column<
 				T['$inferSelect'][keyof T['$inferSelect']]
 			>
-			// Caso: valor primitivo (string, number, Date, etc)
+			// Primitives values
 			if (typeof filter !== 'object' || filter instanceof Date) {
 				conditions.push(
 					createConditionEnhanced(
@@ -345,7 +357,8 @@ export function createFilters<T extends BaseEntity, Db extends BaseDatabase>({
 				continue
 			}
 
-			if ('toSQL' in filter || filter instanceof SQL) {
+			// SQL instances or expressions
+			if (filter instanceof SQL) {
 				conditions.push(filter)
 				continue
 			}
@@ -367,6 +380,8 @@ export function createFilters<T extends BaseEntity, Db extends BaseDatabase>({
 					([, value]) => value !== undefined,
 				) as FilterEntry<T>[]
 			}
+
+			// Criteria Filters
 			for (const [op, value] of getFilterEntries(
 				filter as FilterOperators<T['$inferSelect'][keyof T['$inferSelect']]>,
 			)) {
@@ -408,6 +423,21 @@ export function createFilters<T extends BaseEntity, Db extends BaseDatabase>({
 						break
 					case '$nin':
 						wrapper.push(notInArray(column, value))
+						break
+					case '$like':
+						wrapper.push(like(column, value))
+						break
+					case '$ilike':
+						wrapper.push(handleILike(column, value))
+						break
+					case '$contains':
+						wrapper.push(contains(column, value))
+						break
+					case '$startsWith':
+						wrapper.push(startsWith(column, value))
+						break
+					case '$endsWith':
+						wrapper.push(endsWith(column, value))
 						break
 					default:
 						wrapper.push(eq(column, value))
@@ -460,7 +490,7 @@ type FiltersReturn<T extends BaseEntity, QB extends QBuilders> = {
 	withRelations: <Q extends QB>(q: Q, relations?: WithRelations[]) => Q
 	withCustom: <Q extends QB, TResult>(
 		q: Q,
-		custom?: QueryOpts<T, TResult>['custom'],
+		custom?: QueryOpts<T, TResult>['where'],
 	) => Q
 	withSoftDeleted: <Q extends QB>(q: Q, skip?: boolean) => Q
 	withWorkspace: <Q extends QB, TResult>(

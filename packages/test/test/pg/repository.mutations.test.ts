@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm'
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
 	itemSchema,
@@ -12,7 +13,6 @@ import {
 	userService,
 } from './repository'
 import { populate, setup, setupBeforeAll, setupCreations } from './setup'
-import { eq } from 'drizzle-orm'
 
 setupBeforeAll()
 
@@ -468,11 +468,15 @@ describe('PG Service: Mutation Operations', () => {
 		const store = await setupCreations.stores()
 		const salesHeader = await salesService.mockHeader(store.id)
 
-		const [error, updated] = await salesLinesService.update(1, {
-			description: 'Updated description',
-		}, {
-			custom: eq(salesLinesService.entity.documentNo, salesHeader.id),
-		})
+		const [error, _updated] = await salesLinesService.update(
+			1,
+			{
+				description: 'Updated description',
+			},
+			{
+				custom: eq(salesLinesService.entity.documentNo, salesHeader.id),
+			},
+		)
 
 		expect(error).toBeNull()
 
@@ -483,6 +487,8 @@ describe('PG Service: Mutation Operations', () => {
 		})
 
 		expect(updatedLine).toBeDefined()
-		expect(updatedLine.every((line) => line.description === 'Updated description')).toBe(true)
+		expect(
+			updatedLine.every((line) => line.description === 'Updated description'),
+		).toBe(true)
 	})
 })

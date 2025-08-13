@@ -193,7 +193,7 @@ export interface QueryOpts<
 	 *   )
 	 * ```
 	 */
-	custom?: SQL
+	where?: SQL
 	/**
 	 * Include related entities in the query result
 	 * This is a legacy field and will be removed in future versions.
@@ -224,6 +224,11 @@ export type CriteriaFilters =
 	| '$in'
 	| '$nin'
 	| '$between'
+	| '$ilike'
+	| '$like'
+	| '$contains'
+	| '$startsWith'
+	| '$endsWith'
 export type FilterOperators<T> = {
 	[K in CriteriaFilters]?: K extends '$in' | '$nin'
 		? T[]
@@ -237,6 +242,16 @@ export type CriteriaFilter<T extends BaseEntity> = {
 		| T['$inferSelect'][K]
 		| FilterOperators<T['$inferSelect'][K]>
 		| SQL
+}
+
+// Helper type used to improve editor suggestions when writing object literals.
+// This variant excludes raw SQL so that when a user types `{ ... }`,
+// IntelliSense only shows the criteria operators (e.g. $eq, $gt, ...).
+// We still support SQL per-field via overloaded method signatures below.
+export type CriteriaFilterOperators<T extends BaseEntity> = {
+	[K in keyof T['$inferSelect']]?:
+		| T['$inferSelect'][K]
+		| FilterOperators<T['$inferSelect'][K]>
 }
 
 export interface FindByQueryOpts<
@@ -348,9 +363,9 @@ export type IdType<
 		? IdType // Use the natural 'id' field type
 		: never
 
-type DeleteType = {
-	success: boolean
-	message?: string
+export type DeleteType = {
+	readonly success: boolean
+	readonly message?: string
 }
 
 export interface MutationOperations<
@@ -387,7 +402,7 @@ export interface MutationOperations<
 		(
 			id: IdType<T, TOpts>,
 			hooks?: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect'][]>,
-		): Promise<DeleteType>,
+		): Promise<DeleteType>
 		(
 			id: IdType<T, TOpts>,
 			hooks?: ExtendedServiceHooks<T['$inferInsert'], T['$inferSelect']>,
@@ -433,24 +448,46 @@ export interface QueryOperations<
 	>(
 		opts?: FindOneOpts<T, TResult, TRels>,
 	) => Promise<TResult | null>
-	findBy: <
-		TRels extends WithRelations[] = [],
-		TResult = TRels['length'] extends 0
-			? T['$inferSelect'][]
-			: RelationType<T, TRels>[],
-	>(
-		criteria: CriteriaFilter<T>,
-		opts?: FindByQueryOpts<T, TResult, TRels>,
-	) => Promise<TResult>
-	findByMatching: <
-		TRels extends WithRelations[] = [],
-		TResult = TRels['length'] extends 0
-			? T['$inferSelect'][]
-			: RelationType<T, TRels>[],
-	>(
-		criteria: CriteriaFilter<T>,
-		opts?: FindByQueryOpts<T, TResult, TRels>,
-	) => Promise<TResult>
+	findBy: {
+		<
+			TRels extends WithRelations[] = [],
+			TResult = TRels['length'] extends 0
+				? T['$inferSelect'][]
+				: RelationType<T, TRels>[],
+		>(
+			criteria: CriteriaFilterOperators<T>,
+			opts?: FindByQueryOpts<T, TResult, TRels>,
+		): Promise<TResult>
+		<
+			TRels extends WithRelations[] = [],
+			TResult = TRels['length'] extends 0
+				? T['$inferSelect'][]
+				: RelationType<T, TRels>[],
+		>(
+			criteria: CriteriaFilter<T>,
+			opts?: FindByQueryOpts<T, TResult, TRels>,
+		): Promise<TResult>
+	}
+	findByMatching: {
+		<
+			TRels extends WithRelations[] = [],
+			TResult = TRels['length'] extends 0
+				? T['$inferSelect'][]
+				: RelationType<T, TRels>[],
+		>(
+			criteria: CriteriaFilterOperators<T>,
+			opts?: FindByQueryOpts<T, TResult, TRels>,
+		): Promise<TResult>
+		<
+			TRels extends WithRelations[] = [],
+			TResult = TRels['length'] extends 0
+				? T['$inferSelect'][]
+				: RelationType<T, TRels>[],
+		>(
+			criteria: CriteriaFilter<T>,
+			opts?: FindByQueryOpts<T, TResult, TRels>,
+		): Promise<TResult>
+	}
 	count: (
 		criteria?: Partial<T['$inferSelect']>,
 		opts?: QueryOpts<T, number>,
@@ -551,15 +588,26 @@ export interface Service<
 	TOpts extends ServiceOptions<T> | undefined = undefined,
 > extends ServiceMethods<T, DB, TOpts> {
 	readonly _: ServiceMethods<T, DB, TOpts> & {
-		searchTyped: <
-			TRels extends WithRelations[] = [],
-			TResult = TRels['length'] extends 0
-				? T['$inferSelect'][]
-				: RelationType<T, TRels>[],
-		>(
-			criteria: CriteriaFilter<T>,
-			opts?: FindByQueryOpts<T, TResult, TRels>,
-		) => Promise<TResult>
+		searchTyped: {
+			<
+				TRels extends WithRelations[] = [],
+				TResult = TRels['length'] extends 0
+					? T['$inferSelect'][]
+					: RelationType<T, TRels>[],
+			>(
+				criteria: CriteriaFilterOperators<T>,
+				opts?: FindByQueryOpts<T, TResult, TRels>,
+			): Promise<TResult>
+			<
+				TRels extends WithRelations[] = [],
+				TResult = TRels['length'] extends 0
+					? T['$inferSelect'][]
+					: RelationType<T, TRels>[],
+			>(
+				criteria: CriteriaFilter<T>,
+				opts?: FindByQueryOpts<T, TResult, TRels>,
+			): Promise<TResult>
+		}
 	}
 	readonly entityName: string
 	readonly db: DB

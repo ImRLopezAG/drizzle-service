@@ -9,7 +9,7 @@ import {
 	userService,
 } from './repository'
 import { items, salesHeaders, salesLines, stores } from './schema'
-import { setup, setupBeforeAll, setupCreations, populate } from './setup'
+import { populate, setup, setupBeforeAll, setupCreations } from './setup'
 
 setupBeforeAll()
 
@@ -107,11 +107,9 @@ describe('SQLITE Service: Query Operations (Basic)', () => {
 		expect(items).toBeInstanceOf(Array)
 		expect(items.length).toBeGreaterThan(0)
 
-		// All returned items should match at least one of the criteria
-		for (const item of items) {
-			const matchesCriteria = item.status === 'ACTIVE' || item.type === 'ITEM'
-			expect(matchesCriteria).toBe(true)
-		}
+		expect(
+			items.every((item) => item.status === 'ACTIVE' || item.type === 'ITEM'),
+		).toBe(true)
 	})
 
 	it('should find records by partial criteria with custom criteria (BETWEEN)', async () => {

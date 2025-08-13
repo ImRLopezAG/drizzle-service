@@ -46,7 +46,12 @@ export const createSqliteService = createService<SQLiteDb>(
 		type T = typeof table
 		type O = typeof opts
 
-		type Hooks<V = false> = ExtendedServiceHooks<T['$inferInsert'], V extends true ? T['$inferSelect'][] : T['$inferSelect'] > | undefined
+		type Hooks<V = false> =
+			| ExtendedServiceHooks<
+					T['$inferInsert'],
+					V extends true ? T['$inferSelect'][] : T['$inferSelect']
+			  >
+			| undefined
 
 		const {
 			defaultLimit = 100,
@@ -103,7 +108,7 @@ export const createSqliteService = createService<SQLiteDb>(
 				TRels extends WithRelations[] = [],
 				TResult = TRels['length'] extends 0
 					? T['$inferSelect'][]
-					: RelationType<T, TRels>[]
+					: RelationType<T, TRels>[],
 			>(
 				opts: QueryOpts<T, TResult, TRels> = {} as QueryOpts<T, TResult, TRels>,
 			) => {
@@ -260,7 +265,7 @@ export const createSqliteService = createService<SQLiteDb>(
 					opts.caseSensitive ?? false,
 				)
 
-				const { custom, ...restOpts } = opts
+				const { where: custom, ...restOpts } = opts
 				if (custom) {
 					conditions.push(custom)
 				}
@@ -292,7 +297,7 @@ export const createSqliteService = createService<SQLiteDb>(
 					opts.caseSensitive ?? false,
 				)
 
-				const { custom, ...restOpts } = opts
+				const { where: custom, ...restOpts } = opts
 
 				return handleError(
 					handleQueries<TResult, TRels>(createBaseQuery(), restOpts, {
@@ -331,13 +336,11 @@ export const createSqliteService = createService<SQLiteDb>(
 					}),
 				)
 			},
-			
 		}
 
 		// ===============================
 		// 🚀 MUTATION OPERATIONS
 		// ===============================
-
 
 		const _mutationOperations: MutationOperations<T, O> = {
 			create: (data: T['$inferInsert'], hooks) => {
@@ -404,13 +407,13 @@ export const createSqliteService = createService<SQLiteDb>(
 								.where(hooks?.custom || eq(table[idField] as SQLWrapper, id))
 								.returning()
 								.execute()
-								if(!hooks?.custom) {
-									const result = data[0]
-									if (!result || data.length === 0) {
-										throw createNotFoundError(entityName, id)
-									}
-									return result as T['$inferSelect']
+							if (!hooks?.custom) {
+								const result = data[0]
+								if (!result || data.length === 0) {
+									throw createNotFoundError(entityName, id)
 								}
+								return result as T['$inferSelect'][]
+							}
 							return data as T['$inferSelect'][]
 						})
 
@@ -429,11 +432,13 @@ export const createSqliteService = createService<SQLiteDb>(
 								},
 							)
 						}
-						
+
 						yield* executeHooks(hooks as Hooks<true>, result, 'after')
-						return result as any
+						return result
 					}).pipe(
-						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks as Hooks)),
+						Effect.catchAll((error) =>
+							handleOptionalErrorHook(error, hooks as Hooks),
+						),
 					),
 				)
 			},
@@ -449,11 +454,10 @@ export const createSqliteService = createService<SQLiteDb>(
 								.onConflictDoUpdate({
 									target: table[getIdField()] as IndexColumn,
 									set: data,
-									setWhere:
-										eq(
-											table[getIdField()] as SQLWrapper,
-											data[getIdField() as keyof T['$inferInsert']],
-										),
+									setWhere: eq(
+										table[getIdField()] as SQLWrapper,
+										data[getIdField() as keyof T['$inferInsert']],
+									),
 								})
 								.returning()
 								.execute()
@@ -472,11 +476,10 @@ export const createSqliteService = createService<SQLiteDb>(
 										.onConflictDoUpdate({
 											target: table[getIdField()] as IndexColumn,
 											set: data,
-											setWhere:
-												eq(
-													table[getIdField()] as SQLWrapper,
-													data[getIdField() as keyof T['$inferInsert']],
-												),
+											setWhere: eq(
+												table[getIdField()] as SQLWrapper,
+												data[getIdField() as keyof T['$inferInsert']],
+											),
 										})
 										.toSQL(),
 								},
@@ -1118,9 +1121,9 @@ export const createSqliteService = createService<SQLiteDb>(
 						}
 
 						return [result.batch, result.data] as BulkOperationResult<
-								{ readonly success: boolean; readonly message?: string },
-								T
-							>
+							{ readonly success: boolean; readonly message?: string },
+							T
+						>
 					}).pipe(
 						Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
 					),
@@ -1278,9 +1281,9 @@ export const createSqliteService = createService<SQLiteDb>(
 					}
 
 					return [result.batch, result.data] as BulkOperationResult<
-								{ readonly success: boolean; readonly message?: string },
-								T
-							>
+						{ readonly success: boolean; readonly message?: string },
+						T
+					>
 				}).pipe(
 					Effect.catchAll((error) => handleOptionalErrorHook(error, hooks)),
 					Effect.runPromise,
@@ -1314,7 +1317,7 @@ export const createSqliteService = createService<SQLiteDb>(
 					opts.caseSensitive ?? false,
 				)
 
-				const { custom, ...restOpts } = opts
+				const { where: custom, ...restOpts } = opts
 				return handleError(
 					handleQueries(createBaseQuery(), restOpts, {
 						beforeParse(query) {
